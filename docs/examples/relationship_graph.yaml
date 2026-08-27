@@ -1,0 +1,43 @@
+version: 1
+nodes:
+  - id: lin_yuan
+    name: 林远
+    tags: [主角]
+  - id: su_wan
+    name: 苏婉
+    tags: [关键配角]
+  - id: xu_mo
+    name: 许默
+    tags: [对手]
+
+edges:
+  - source_id: lin_yuan
+    target_id: su_wan
+    type: ally
+    intensity: 78
+    status: active
+    evidence_events:
+      - capital.turn_0003
+      - capital.turn_0004
+    change_log:
+      - turn: 3
+        from_status: neutral
+        to_status: active
+        reason: 并肩应对宫变
+      - turn: 4
+        from_intensity: 60
+        to_intensity: 78
+        reason: 共担风险后信任增强
+
+  - source_id: lin_yuan
+    target_id: xu_mo
+    type: rival
+    intensity: 45
+    status: unstable
+    evidence_events:
+      - capital.turn_0005
+    change_log:
+      - turn: 5
+        from_status: neutral
+        to_status: unstable
+        reason: 争夺同一线索

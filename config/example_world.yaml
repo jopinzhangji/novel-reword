@@ -1,0 +1,13 @@
+# 全局兜底：未绑定 current_novel 时由 load_world_config 读取。
+# 新小说引导会在小说目录写入正式 world.yaml；此处仅最小占位，与 DEFAULT_RUNTIME_NOVEL 中 scopes 一致。
+
+world:
+  name: ""
+  era: ""
+  rules: []
+time:
+  start: ""
+scopes:
+  - id: main
+    name: 主线
+    description: （绑定小说目录后由小说级 config 覆盖）

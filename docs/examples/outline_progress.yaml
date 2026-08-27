@@ -1,0 +1,7 @@
+# 示例：大纲进度（置于 <data_root>/book/outline/progress.yaml，可选）
+
+version: 1
+chapter_id: ch01
+beat_id: ch01_b1
+# 当前节拍内已推进的回合数（软提示「建议单节拍 <3 回合」时可读取）
+turns_in_beat: 0

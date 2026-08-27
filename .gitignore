@@ -1,0 +1,47 @@
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# DevAgent 运行产出（保留 output 目录及各子目录 README，忽略每次运行生成的文件）
+dev_agent/output/failures/*.md
+dev_agent/output/suggestions/*.md
+dev_agent/output/patches/*
+!dev_agent/output/patches/README.md
+dev_agent/output/search_ideas/*
+!dev_agent/output/search_ideas/README.md
+dev_agent/output/latest_run.json
+dev_agent/output/cursor_tasks.md
+dev_agent/output/next_plan.md
+dev_agent/output/author_edits/*
+
+# 日志（主程序输出）
+logs/
+
+# 设定研究 Agent 产出（可重新生成；未绑定小说时在全局 config，绑定后在小说目录 config）
+**/setting_research_output.yaml
+**/author_interaction_state.yaml
+
+# 设定会话与 book 落盘（本地/可重新生成，不提交）
+config/design_session.yaml
+# 当前作品指针（本地）
+config/current_novel.yaml
+data/
+
+# 临时文件（勿提交）
+.git_commit_msg.txt
+COMMIT_MSG.txt
+_gcmsg.txt
+
+# 本地/敏感
+.env
+*.local
+*.key

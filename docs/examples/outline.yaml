@@ -1,0 +1,27 @@
+# 示例：小说级大纲（置于 <data_root>/book/outline/outline.yaml）
+# 无此文件时主流程行为与旧版一致。见 docs/design/outline-and-beats.md
+
+version: 1
+
+# 二选一或并存：顶层 chapters，或 volumes[].chapters
+chapters:
+  - id: ch01
+    title: 开端
+    dramatic_question: 主角能否在首次危机中活下来？
+    beats:
+      - id: ch01_b1
+        intent: 建立村庄日常与山雨欲来的氛围
+        status: planned
+        suggested_scope_id: 村庄
+        tags: [氛围]
+      - id: ch01_b2
+        intent: 怪物现身，第一次对抗或逃亡
+        status: planned
+        character_hooks:
+          张凡: 第一次面对生死压力时的选择
+
+# 可选：分卷时再使用
+# volumes:
+#   - id: vol1
+#     title: 第一卷
+#     chapters: []

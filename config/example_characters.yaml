@@ -1,0 +1,11 @@
+# 全局兜底：未绑定 current_novel 时由 load_characters_config 读取。
+# 新小说引导会在小说目录写入正式 characters.yaml。
+
+characters:
+  - id: protagonist
+    name: 主角
+    is_protagonist: true
+    role: （绑定小说目录后完善）
+    traits: []
+    goals: []
+    background: （绑定小说目录后完善）

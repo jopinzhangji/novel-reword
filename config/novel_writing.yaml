@@ -1,0 +1,9 @@
+world_coordinator_enabled: true
+setting_research:
+  enabled: true
+  trigger: design_only
+turn_based: true
+author_in_the_loop: true
+turn_body_max_chars: 2000
+storage:
+  data_root: data

@@ -1,0 +1,15 @@
+---
+description: 改代码前先更新并对齐 Spec/SDD，方案确认后再动实现
+alwaysApply: true
+---
+
+# 文档先行（Spec / SDD）
+
+在修改 **`src/`**、**`run_*.py`**、**`config/`** 中与**作者在环、设定阶段、回合审阅、意图分类、检索注入**相关的行为前：
+
+1. **先改文档**：对照 [docs/specs/author-in-loop-spec.md](docs/specs/author-in-loop-spec.md)（L1）与 [docs/design/author-agent-harness.md](docs/design/author-agent-harness.md)（L2）；若触及产品边界另查根目录 [DESIGN.md](DESIGN.md)、[TECH_IMPLEMENTATION.md](TECH_IMPLEMENTATION.md) §6。
+2. **呈现方案**：用简短条目说明「将改哪条 Spec/SDD、代码落点、如何验收」；**待用户确认无误后再写代码**。
+3. **例外**：纯重构（行为与测试不变）可只更新 SDD「与代码映射」表；纯 bugfix（恢复既有规约）在 WORKLOG 记一行即可。
+4. **收尾**：更新 [docs/planning/next-iteration.md](docs/planning/next-iteration.md) 对应步骤状态；规约级变更在 [WORKLOG.md](WORKLOG.md) 记摘要。
+
+Harness 重构须按 [author-agent-harness.md §6.1](docs/design/author-agent-harness.md) **R0→R8** 顺序切片，**禁止**单 PR 吞掉多阶段。
