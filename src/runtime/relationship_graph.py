@@ -171,6 +171,147 @@ def upsert_co_presence_edge(
     )
 
 
+# --- 语义关系边（阶段 1a；设计文档 §4.5）---
+
+# 场景级轻量词典：摘要命中关键词 → 整场角色对的语义关系类型（无命中保持 co_presence）。
+# 顺序即优先级（冲突判定优先于温和关系，避免把一场冲突误判为日常信任）。
+_SCENE_RELATION_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("rival", ("冲突", "对峙", "剑拔弩张", "决裂", "反目", "对抗", "争", "争吵", "翻脸")),
+    ("hate", ("仇恨", "杀意", "恨", "仇", "厌恶", "欺压")),
+    ("trust", ("信任", "托付", "倚重", "信赖", "深信", "委以重任")),
+    ("debt", ("救命", "报恩", "相助", "欠", "恩", "回报")),
+    ("ally", ("联手", "并肩", "同盟", "结盟", "合力", "约定")),
+    ("mentor", ("指点", "教导", "授业", "拜师", "收徒")),
+    ("love", ("爱慕", "心动", "钟情", "倾心", "相恋")),
+]
+
+
+def infer_scene_relation(summary_hint: str) -> str | None:
+    """
+    从事件摘要推断"本场景的角色关系基调"：命中词典返回 rel_type，否则 None。
+    供 sync_semantic_relations_from_event 做轻量语义落位（阶段 1a 不接 LLM，保确定性）。
+    """
+    text = (summary_hint or "").strip()
+    if not text:
+        return None
+    for rel_type, keywords in _SCENE_RELATION_RULES:
+        if any(k in text for k in keywords):
+            return rel_type
+    return None
+
+
+def _find_edge(graph: dict[str, Any], a: str, b: str) -> dict[str, Any] | None:
+    edges = graph.get("edges") or []
+    for edge in edges:
+        if isinstance(edge, dict) and edge.get("source_id") == a and edge.get("target_id") == b:
+            return edge
+    return None
+
+
+def upsert_semantic_edge(
+    graph: dict[str, Any],
+    *,
+    source_id: str,
+    target_id: str,
+    rel_type: str,
+    intensity: str = "med",
+    status: str = "active",
+    direction: str | None = None,
+    evidence_event: str,
+    turn_index: int,
+    scope_id: str,
+    reason: str = "",
+) -> dict[str, Any]:
+    """
+    写入/更新一条有类型的关系边（`rel_type`/`intensity`/`status`/可选 `direction`），
+    记录归纳证据与 change_log。与 `upsert_co_presence_edge` 对称但带语义。
+    若边已存在（任意类型），补 evidence/change_log 并按需更新语义字段；返回该边 dict。
+    """
+    a, b = _canonical_pair(source_id, target_id)
+    reason = (reason or "").strip()[:200] or f"{rel_type}（{evidence_event}）"
+    edges = graph.setdefault("edges", [])
+    if not isinstance(edges, list):
+        graph["edges"] = []
+        edges = graph["edges"]
+    edge = _find_edge(graph, a, b)
+    if edge is None:
+        edge = {
+            "source_id": a,
+            "target_id": b,
+            "type": rel_type,
+            "intensity": intensity,
+            "status": status,
+            "evidence_events": [],
+            "change_log": [],
+        }
+        if direction:
+            edge["direction"] = direction
+        edges.append(edge)
+    # 语义字段更新：仅当传入非空且（新类型为准）时覆盖，避免与既有高级语义冲突。
+    edge["type"] = rel_type
+    edge["intensity"] = intensity
+    edge["status"] = status
+    if direction:
+        edge["direction"] = direction
+    edge["last_updated_turn"] = turn_index
+    ev = edge.setdefault("evidence_events", [])
+    if isinstance(ev, list) and evidence_event not in ev:
+        ev.append(evidence_event)
+    cl = edge.setdefault("change_log", [])
+    if isinstance(cl, list):
+        cl.append(
+            {
+                "turn": turn_index,
+                "scope_id": scope_id,
+                "from_type": None,
+                "to_type": rel_type,
+                "reason": reason,
+            }
+        )
+    return edge
+
+
+def sync_semantic_relations_from_event(
+    graph: dict[str, Any],
+    *,
+    scope_id: str,
+    turn_index: int,
+    present_character_ids: list[str],
+    event_summary: str,
+    llm_provider: Any = None,
+) -> list[str]:
+    """
+    在共现边基础上，按场景摘要做轻量语义升级：命中词典则在"至少一条已带语义的边"上登记证据，
+    其余在场对若仅 co_presence 则升级为该场景类型。返回本回合升级/登记的边标识列表。
+    阶段 1a 为确定性实现（`infer_scene_relation`）；`llm_provider` 为未来 LLM 判定的保留扩展点。
+    """
+    present = sorted({str(x) for x in present_character_ids if x})
+    if len(present) < 2:
+        return []
+    rel_type = infer_scene_relation(event_summary)
+    if not rel_type:
+        return []
+    evidence = f"{scope_id}.turn_{turn_index:04d}"
+    touched: list[str] = []
+    for i in range(len(present)):
+        for j in range(i + 1, len(present)):
+            a, b = present[i], present[j]
+            upsert_semantic_edge(
+                graph,
+                source_id=a,
+                target_id=b,
+                rel_type=rel_type,
+                intensity="med",
+                status="active",
+                evidence_event=evidence,
+                turn_index=turn_index,
+                scope_id=scope_id,
+                reason=f"{event_summary[:200] or '语义升级'}",
+            )
+            touched.append(f"{a}-{b}")
+    return touched
+
+
 def sync_relationship_graph_after_scope_turn(
     data_root: Path,
     *,

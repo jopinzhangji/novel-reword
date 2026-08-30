@@ -11,10 +11,12 @@ def retrieve_character_memory(
     events_limit: int = 10,
     relations_limit: int = 20,
     include_profile: bool = True,
+    include_layers: bool = False,
 ) -> str:
     """
     检索某角色的私有记忆（profile、relations、events），拼接为一段文本，供角色 Agent 生成时注入 prompt。
     storage 需实现 get_profile、get_relations、get_events（如 MemoryStorage）。
+    include_layers=True 时追加 L2 解释（[解释（L2）]）与 L3 短期策略（[短期计划（L3）]）——§4 记忆分层检索；storage 需实现 get_interpretations/get_active_strategies。
     """
     parts = []
     if include_profile:
@@ -28,6 +30,17 @@ def retrieve_character_memory(
     events = storage.get_events(character_id, limit=events_limit)
     if events:
         parts.append("[事件提炼] " + " | ".join(_format_event(e) for e in events))
+    if include_layers:
+        layers_parts = []
+        if hasattr(storage, "get_interpretations"):
+            interp = storage.get_interpretations(character_id)
+            if interp:
+                layers_parts.append("[解释（L2）] " + " | ".join(_format_event(e) for e in interp))
+        if hasattr(storage, "get_active_strategies"):
+            strat = storage.get_active_strategies(character_id)
+            if strat:
+                layers_parts.append("[短期计划（L3）] " + " | ".join(_format_event(e) for e in strat))
+        parts.extend(layers_parts)
     if not parts:
         return ""
     return "\n".join(parts)

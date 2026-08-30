@@ -11,6 +11,11 @@ from .relationship import (
     get_relation_change_log,
     format_relation_snippet,
 )
+from .info_view import (
+    event_visible_to_character,
+    build_character_event_view,
+    format_unknown_hint,
+)
 
 __all__ = [
     "retrieve_character_memory",
@@ -20,4 +25,7 @@ __all__ = [
     "get_neighbors",
     "get_relation_change_log",
     "format_relation_snippet",
+    "event_visible_to_character",
+    "build_character_event_view",
+    "format_unknown_hint",
 ]

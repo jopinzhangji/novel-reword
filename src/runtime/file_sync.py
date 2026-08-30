@@ -118,7 +118,9 @@ def sync_scope_turn(
     body = event_entry.get("body", "")
     time_str = event_entry.get("time", "")
     place_str = event_entry.get("place", "")
-    meta = f"scope_id: {scope_id!r}\ntime: {time_str!r}\nplace: {place_str!r}\n"
+    present = event_entry.get("present_characters") or []
+    present_str = ",".join(str(x) for x in present)
+    meta = f"scope_id: {scope_id!r}\ntime: {time_str!r}\nplace: {place_str!r}\npresent_characters: {present_str}\n"
     if body and body.strip():
         content = f"# 回合 {turn_index}\n\n{meta}\n## 摘要\n\n{summary}\n\n## 正文\n\n{body}\n"
     else:
@@ -175,6 +177,7 @@ def _parse_turn_md_content(text: str, scope_id: str, turn_index: int) -> dict:
         "scope_id": scope_id,
         "time": "",
         "place": "",
+        "present_characters": [],
     }
     lines = text.splitlines()
     i = 0
@@ -188,6 +191,9 @@ def _parse_turn_md_content(text: str, scope_id: str, turn_index: int) -> dict:
             event["time"] = line.split(":", 1)[-1].split("：", 1)[-1].strip().strip("'\"")
         elif stripped.startswith("place:") or stripped.startswith("place："):
             event["place"] = line.split(":", 1)[-1].split("：", 1)[-1].strip().strip("'\"")
+        elif stripped.startswith("present_characters:") or stripped.startswith("present_characters："):
+            val = line.split(":", 1)[-1].split("：", 1)[-1].strip().strip("'\"")
+            event["present_characters"] = [x for x in val.replace("，", ",").split(",") if x]
         elif stripped == "## 摘要":
             i += 1
             summary_parts = []

@@ -26,7 +26,7 @@ DEFAULT_RUNTIME_NOVEL: dict = {
         }
     },
     "agents": {
-        "characters": {"enabled_ids": ["protagonist"]},
+        "characters": {"enabled_ids": ["protagonist"], "react_chain": False, "memory_layers": False},
         "scopes": {"enabled_ids": ["main"]},
     },
 }

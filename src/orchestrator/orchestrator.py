@@ -139,6 +139,15 @@ class Orchestrator:
         auto_write=True（默认）：写回事件簿与范围状态，不写角色记忆（记忆留作者确认后由 apply_memory_write 执行）。
         auto_write=False：不写任何存储，仅返回 TurnResult，供作者在环审阅后调用 apply_event_and_state_write / apply_memory_write。
         """
+        present_growth_snippet = ""
+        if self._data_root:
+            try:
+                from src.runtime.character_growth import format_present_growth_snippet
+                present_growth_snippet = format_present_growth_snippet(
+                    self._data_root, self.characters_config, present_character_ids
+                )
+            except Exception:
+                present_growth_snippet = ""
         ctx = build_turn_context_from_storage(
             scope_id=scope_id,
             time=time,
@@ -148,6 +157,7 @@ class Orchestrator:
             world_config=self.world_config,
             last_turn_summary=last_turn_summary,
             recent_events_k=recent_events_k,
+            present_growth_snippet=present_growth_snippet,
         )
         scope_agent = self.scope_agents.get(scope_id)
         if not scope_agent:
@@ -170,10 +180,58 @@ class Orchestrator:
                 else:
                     character_outputs[key] = out
 
+        # U-6 回合内二次反应链（默认关）：先发批 → 定向二次批 → 合并。
+        react_chain = bool((self.runtime_config.get("agents") or {}).get("characters", {}).get("react_chain", False))
+        if react_chain and len(character_outputs) >= 2:
+            self._apply_react_chain(ctx, character_outputs)
+
         result = TurnResult(scope_output=scope_output, character_outputs=character_outputs)
         if auto_write:
             self.apply_event_and_state_write(result, scope_id, time, place)
         return result
+
+    def _apply_react_chain(self, ctx, character_outputs: dict[str, CharacterTurnOutput]) -> None:
+        """
+        U-6：两次批合并。对每个在场已注册 CharacterAgent 并行 `react_to_peers`，
+        peers_snippet 只含其他在场角色的**公开** dialogue_action（不泄私有 inner_monologue），
+        并将反应并入该角色的 dialogue_action / inner_monologue；reaction 字段供观测。
+        壳/Dummy 角色的反应为空时保持原样。
+        """
+        from src.agents.character.agent import CharacterAgent, CharacterTurnOutput
+        from src.agents.character.agent import _get_character_profile as _profile
+
+        def _name_of(cid: str) -> str:
+            p = _profile(self.characters_config, cid)
+            return p.get("name") or cid
+
+        peers: dict[str, str] = {}
+        for cid in character_outputs.keys():
+            parts = []
+            for other, out in character_outputs.items():
+                if other == cid:
+                    continue
+                spoken = (out.dialogue_action or "").strip()
+                if spoken:
+                    parts.append(f"{_name_of(other)}（{other}）：{spoken}")
+            peers[cid] = "\n".join(parts)
+
+        def _react(cid: str):
+            agent = self.character_agents.get(cid)
+            out = character_outputs.get(cid)
+            if not agent or not out:
+                return
+            reag = agent.react_to_peers(ctx, peers.get(cid, ""))
+            if not reag.reaction:
+                return
+            dialog = (out.dialogue_action or "").strip()
+            mono = (out.inner_monologue or "").strip()
+            # 合并：反应并入公开言行与内心；将混合 reaction 片段拆回两通道。
+            out.inner_monologue = mono + ("\n" + reag.inner_monologue if reag.inner_monologue else "")
+            out.dialogue_action = dialog + ("\n" + reag.dialogue_action if reag.dialogue_action else "")
+            out.reaction = reag.reaction
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            list(executor.map(_react, list(peers.keys())))
 
     def apply_event_and_state_write(
         self,
@@ -206,6 +264,8 @@ class Orchestrator:
                 "time": time,
                 "place": place,
             }
+        # 信息视野（§4.6）：记录本回合在场角色，作为该事件对谁可见的依据。
+        event_entry["present_characters"] = sorted(result.character_outputs.keys())
         self.storage.append_events(scope_id, [event_entry])
         turn_index: int | None = None
         if self._data_root:
@@ -233,6 +293,42 @@ class Orchestrator:
                 present_character_ids=present,
                 event_summary=str(event_entry.get("summary") or ""),
             )
+            # 语义关系边（§4.5）：在共现边基础上按场景摘要做轻量语义升级（Dummy 场景无命中则保持共现）。
+            from src.runtime.relationship_graph import (
+                load_graph,
+                relationship_graph_yaml_path,
+                save_graph,
+                sync_semantic_relations_from_event,
+            )
+            gpath = relationship_graph_yaml_path(self._data_root)
+            graph = load_graph(gpath)
+            sync_semantic_relations_from_event(
+                graph,
+                scope_id=scope_id,
+                turn_index=turn_index,
+                present_character_ids=present,
+                event_summary=str(event_entry.get("summary") or ""),
+            )
+            save_graph(gpath, graph)
+            # 阶段 1b/2：五维语义迁移（§2/§3）+ GrowthGuard 强约束（§6）。
+            # 仅对在场关键角色执行；触摸 growth_state.yaml 与 emotions 槽位；guard 拒绝/钳制写回 guard_audit。
+            from src.runtime.character_growth import GrowthGuard, apply_growth_transition_for_turn
+            _, guard_audit = apply_growth_transition_for_turn(
+                self.storage,
+                self._data_root,
+                scope_id=scope_id,
+                turn_index=turn_index,
+                present_character_ids=present,
+                event_entry=event_entry,
+                guard=GrowthGuard(),
+            )
+            for entry in guard_audit:
+                if entry.get("action") != "allowed":
+                    logger.info(
+                        "GrowthGuard %s · %s · 规则 %s · %s",
+                        entry.get("action"), entry.get("character_id"),
+                        entry.get("rule"), entry.get("reason"),
+                    )
 
     def apply_memory_write(
         self,
@@ -242,15 +338,34 @@ class Orchestrator:
         place: str,
     ) -> None:
         """
-        作者在环阶段二确认后：将本回合各角色输出写回其私有记忆（事件提炼）。
-        每个在场角色追加一条 append_event_refinement，内容为 dialogue_action 或 inner_monologue 的摘要。
+        作者在环阶段二确认后：将本回合各角色输出写回其私有记忆。
+        - 始终落 L1 事实提炼卡（append_event_refinement，带 layer="L1"）。
+        - `agents.characters.memory_layers` 开启时，追加分层（§4）：
+          L2 解释（可更新，upsert）→ _char_interpretations；
+          L3 策略（可过期，ttl）→ _char_strategies。实现"事实不动/L2 可更新/L3 可过期"的写入校验。
         """
+        memory_layers = bool(
+            (self.runtime_config.get("agents") or {}).get("characters", {}).get("memory_layers")
+        )
+        turn_index = self.storage.get_event_count(scope_id) if memory_layers else None
         for cid, out in result.character_outputs.items():
             summary = (out.dialogue_action or out.inner_monologue or "").strip() or "（本回合无言行摘要）"
             self.storage.append_event_refinement(
                 cid,
-                {"summary": summary, "scope_id": scope_id, "time": time, "place": place},
+                {"summary": summary, "scope_id": scope_id, "time": time, "place": place, "layer": "L1"},
             )
+            if not memory_layers:
+                continue
+            from src.runtime.memory_layers import build_layer_entry, classify_memory_layer
+            layer = classify_memory_layer(summary)
+            entry = build_layer_entry(
+                summary, layer, scope_id=scope_id, turn_index=turn_index,
+                time=time, place=place,
+            )
+            if layer == "L2":
+                self.storage.upsert_interpretation(cid, entry)
+            elif layer == "L3":
+                self.storage.append_strategy(cid, entry)
 
     def run_n_turns(
         self,

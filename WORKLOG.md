@@ -7,13 +7,23 @@
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点** + **W 系列 W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）与**主角姓名一致性修复**（主线叙事者 prompt 注入主角名册，全量 257 通过）；**2026-08-27** **Linux 迁移收口**（开发环境文档 Linux 化、入口 EOF 健壮性、过时状态描述修正，全量 251 通过）；**2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
-| **当前优先** | **工程主线**：**MVP-2**、任务 E；**D9 工作台**：W1→W2→**W3 设定交互**→**W4 章节交互**；**CC-b**；**I6**。 |
+| **近期已完成** | **2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**（主线叙事者 prompt 注入主角名册，全量 257 通过）与**角色独立演进：设计文档对账与优化**（「多视角内部模拟 + 单一主角导出」显式化，doc 闸 ✅）、**阶段 1a/1b/2 编码 + 成长状态注入**（1a 信息视野 + 语义关系边 + 成长骨架；1b 五维迁移规则；2 GrowthGuard 强约束；角色/范围叙事者 prompt 注入成长状态 + **U-6 回合内二次反应链**，全量 300 通过）；**2026-08-27** **Linux 迁移收口**（开发环境文档 Linux 化、入口 EOF 健壮性、过时状态描述修正，全量 251 通过）；**2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
+| **当前优先** | **工程主线**：**MVP-2**、任务 E；**角色成长状态机 MVP**（阶段 1a 差异化视野 + 语义关系 + 成长骨架、1b 五维迁移规则、**2 GrowthGuard 强约束**，见 [next-iteration](./docs/planning/next-iteration.md)）；**D9 工作台**：W1→W2→**W3 设定交互**→**W4 章节交互**；**CC-b**；**I6**。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
 
 ---
 
 ## 2026-08-30
+
+### 三层记忆分层落库 + 写入校验 + 检索消费（角色独立演进）
+
+- **背景**：成长状态机各阶段已收口，但角色记忆仅存 L1 事实标签；本节把 §4 三层记忆**真正落地**——每个关键角色除「发生了什么」（L1）外，还独立保留「我如何理解」（L2，可更新）与「我下一步打算」（L3，可过期）。
+- **新增** `src/runtime/memory_layers.py`：确定性分类器（`classify_memory_layer` 关键词 L3→L2→L1）、`interpretation_subject`（L2 upsert 键）、`strategy_expires_turn`（ttl）、`build_layer_entry`（统一标签）。
+- **存储** `src/runtime/storage.py`：新增 L2 `_char_interpretations`（`upsert_interpretation` 按 subject 原地替换）、L3 `_char_strategies`（`append_strategy` + `get_active_strategies` 过期过滤）+ `get_event_count`。
+- **写回** `src/orchestrator/orchestrator.py::apply_memory_write`：`agents.characters.memory_layers` 开关门——**默认关**只写 L1（船身不破）；开启时 L2→upsert / L3→append_strategy（带 expires_turn）。写入校验语义即槽位语义（事实不动/解释可更新/策略可过期，§9 阶段2 承诺闭合 ✅）。
+- **检索** `src/retrieval/memory.py::retrieve_character_memory(include_layers=False)`：开启追加 `[解释（L2）]`/`[短期计划（L3）]`；`CharacterAgent.turn()` 传 `include_layers=bool(memory_layers)`，仅注入自身 L2/L3、无跨角色泄露（信息视野一致）。
+- **测试**：新增 `tests/unit/test_memory_layers.py`（分类 L1/L2/L3、upsert 原地更新、策略过期过滤、apply_memory_write 开关两态、retrieve include_layers 两态），全量回归通过。
+- **下一步**：大纲 MVP-1b/2、任务 E、D9 工作台 W1–W4、CC-b、I6、成长 MVP 后续。
 
 ### 真实 LLM 联调验证（Linux 移植收尾）
 
@@ -29,6 +39,72 @@
 - **问题**：真实 LLM 联调生成的正文中，主线叙述把主角写成了「苏明」，而 `characters.yaml` 定义的是「林昭」。根因：**ScopeAgent（范围/主线叙事者）的 prompt 未注入主角姓名与关键角色名册**，模型自行虚构姓名；`build_turn_plan_prompt` / `build_turn_body_prompt` 同理。
 - **修复**：新增 `src/runtime/protagonist.py::format_main_characters_snippet(runtime_config, characters_config)`，复用 `resolve_protagonist_id` 生成「【主角与主要角色】」提示块（叙事主角 + 主要角色名册 + 「不得虚构或替换主角姓名、以主角为镜头主轴」约束）；无主角时返回空串。注入三处：`ScopeAgent._build_scope_prompt`、`build_turn_plan_prompt`、`build_turn_body_prompt`（`Orchestrator.from_config` 向 ScopeAgent 传 `characters_config`；`run_novel_with_author.py` 计算一次并传入计划/正文两阶段）。补齐 MVP-1「正文以主角为主线」对**大纲文件缺失时**的主角注入。
 - **测试**：新增 6 条单测（`test_protagonist.py`×3、`test_agent_shells.py`×1、`test_turn_planning_pacing.py`×2），断言主角名与「不得虚构」约束出现在 scope/plan/body prompt；全量 **257 通过 + 1 跳过（live）**。
+
+### 角色独立演进：设计文档对账与优化（doc-first 闸门）
+
+- **背景 / 定位定稿**：确立两层模型 **多视角内部模拟 ⊕ 单一主角导出**（§1.2a）——**内部**是一个类似真实世界的多视角世界：每个关键角色（含主角）各持完整独立的经历/记忆/知情视野/成长状态，独立演进、互不合并、无主角特权；**导出**则由用户从关键角色中选择其一作为本小说叙事主角（`protagonist_id`/`is_protagonist`），主书以该主角为镜头重导出——这仅是对某个已完成视角的渲染收敛，不限制内部哪些角色演进。该定位与既有原则（[outline-and-beats.md](./docs/design/outline-and-beats.md)：正文以主角为主线、每角色系统内为平行主线）一致，`protagonist.py` 单主角导出逻辑保留、不推翻。
+- **文档与代码对账（三处脱节修复）**：优化 [docs/design/character-growth-state-machine.md](./docs/design/character-growth-state-machine.md)——
+  1. **关系图谱已实现**：原文档把 `relationship_graph.py`/`retrieval/relationship.py` 写成"新增"，实际已存在且仅落 `co_presence` 共现边；修订为"扩展为语义关系"（`relation_type/intensity/status/方向` + 复用既有 `evidence_events`/`get_relation`/`get_neighbors`/`get_relation_change_log`）。
+  2. **`emotions[]` 槽位落地**：`MemoryStorage` 每角色 `emotions[]` 已定义但无人写入，明确作为 `mind_state` 的进程内承载。
+  3. **信息视野/感知不对称（新 §4.6）**：补上独立演进前置机制——`shared_story_snippet` 由全量公开流改为**按角色知情的过滤视图**（可见性标签 private/scene_known/public），未知剧情给占位而非剧透，让两个关键角色对同一事件可产生差异化解读；与主角单镜头不冲突（信息不对称作用于系统内演进，主书仍以主角视角）。
+- **接入方案修正（§5）**：`relationship_graph.py` 移到"已存在需扩展"；新增 `src/runtime/character_growth.py`、`src/retrieval/growth.py`、`src/retrieval/info_view.py`；注入点对齐既有 `format_main_characters_snippet`（已接入 ScopeAgent 计划/正文三处）。
+- **分阶段重排（§9）**：阶段 1a（差异化视野 + 语义关系，独立演进前提）→ 阶段 1b（五维状态迁移）→ 阶段 2（GrowthGuard + 校验）。§8/§10 增加"信息视野过滤"类测试与验收（角色不得获得未知事件剧透）。
+- **结果**：文档对账完成，无过时"新增关系图谱"表述；全量 **257 通过 + 1 跳过（live）**（纯文档改动，无代码变更）。
+- **下一步**：按修订后 §9 **阶段 1a** 立项编码（先做差异化视野 + 语义关系，再铺五维迁移）；见 [docs/planning/next-iteration.md](./docs/planning/next-iteration.md) 当前焦点第 3 项。
+
+### 角色独立演进（阶段 1a 编码）：信息视野 + 语义关系边 + 成长骨架
+
+- **背景**：在修订后设计文档 §9.1a 之上落地 MVP-A 三项，为"关键角色独立演进"提供机制本体；全程不新增 LLM 依赖（DummyLLM 路径保持现状），LLM 增强挂开关后。
+- **信息视野（§4.6，头号）**：
+  - 事件写回打可见性标签 `event_entry["present_characters"] = 在场角色`（`orchestrator.apply_event_and_state_write` 两分支统一）；`file_sync.sync_scope_turn` frontmatter 持久化该字段并回读，跨进程 reload 后信息视野仍可判。
+  - 新增 `src/retrieval/info_view.py`：`event_visible_to_character`（按 `present_characters` / `visibility==public` / 旧数据默认可见）、`build_character_event_view`（按角色过滤视图，未知部分只计数不泄内容）。
+  - `CharacterAgent` 的"最近剧情"改为注入该角色自身信息视野（有 storage 时），堵住上帝视角；壳路径无 storage 时沿用原 `shared_story_snippet`，不破坏既有壳行为。
+- **语义关系边（§4.5）**：`relationship_graph.py` 增 `infer_scene_relation`（轻量词典）+ `upsert_semantic_edge`（带 `rel_type/intensity/status/方向`，复用 `evidence_events`/`change_log` 去重累积）+ `sync_semantic_relations_from_event`（场景关键词命中则升级在场语义边，无命中保持 co_presence）；编排器在共现边之后接入。
+- **成长状态骨架（§2）**：新增 `src/runtime/character_growth.py`——`CharacterGrowthState` 数据类 + `load/save_growth_state`（落盘 `<novel_root>/book/characters/<id>/growth_state.yaml`）+ `record_mind_emotion`（接入已有 `storage.emotions[]` 空槽位）+ `format_growth_snippet`。完整五维迁移规则留阶段 1b。
+- **三层记忆标签（§4）**：`apply_memory_write` 的 `event_refinement` 带 `layer="L1"`（分层迁移逻辑留 1b）。
+- **测试**：新增 `test_info_view.py`（角色仅见在场事件、未知不泄内容、public/缺省可见性）、`test_character_growth.py`（字段/持久化 round-trip/emotions 写入）、`test_stage1a_wiring.py`（编排器打 `present_characters` + CharacterAgent 注入信息视野且不含未知剧透）；扩展 `test_relationship_graph.py`（语义边创建/去重/关键词升级/无命中不建边）。全量 **277 通过 + 1 跳过（live）**。
+- **下一步**：阶段 **1b**（五维状态迁移规则，接入 `apply_growth_transition`），并可启动 **U-6** 回合内角色交互/反应链预研；见 next-iteration 当前焦点第 3 项。
+
+### 角色独立演进（阶段 1b 编码）：五维语义迁移规则
+
+- **背景**：落地设计文档 §2/§3 的迁移机制——把一条回合事件按关键词命中迁移规则，对该角色五维子状态（power / mind / social / goal / resource）做**确定性、非数值**的语义增量并写入 `transition_log`（round-trip 可审）。
+- **规则集（`src/runtime/character_growth.py`）**：约 10 条 `_RULES`，每条含 `name`/`keywords`/`apply`，命中其一即触发——`near_death`（濒死/劫后余生）、`trusted_betrayal`（背叛/出卖/欺骗）、`rescue_debt`（救命/恩人）、`conflict_showdown`（对峙/决战/交手）、`deep_loss`（死别/遇害）、`resource_gain`/`resource_loss`（获得/损失）、`goal_affirmed`（领悟/起誓）、`horror_trap`（陷阱/被擒/中毒）、`romance`（爱慕/表白）。配套辅助 `_bump`（计数维度累加，软上限 `_MAX_BUMP=5`）、`_set`（语义值 low/med/high 覆盖）、`_delta`。
+- **入口**：`match_rules_for_event(summary)`（命中哪些规则）、`apply_growth_transition(state, event_bundle) -> (state, fired)`（施加增量 + 写 `transition_log`，截留最近 100 条）、`apply_growth_transition_for_turn(storage, data_root, *, scope_id, turn_index, present_character_ids, event_entry)`（对**在场**关键角色循环 加载→迁移→落盘 `growth_state.yaml`→mind 变化写 `storage.emotions[]`，返回 `{cid: fired}`）。
+- **接线**：`orchestrator.apply_event_and_state_write` 的 `data_root` 门内、语义关系边之后调用 `apply_growth_transition_for_turn`；仅在场角色受影响（与信息视野一致）。不新增 LLM 依赖，Dummy 场景无命中则状态不变，全量回归不受影响。
+- **测试**：`test_character_growth.py` 新增 5 条——规则关键词命中、多规则增量 + transition_log、计数维度软上限、无命中状态不变、`apply_growth_transition_for_turn` 落盘 + emotions 写入 + 不在场角色不受影响。全量 **282 通过 + 1 跳过（live）**。
+- **下一步**：GrowthGuard（阶段 2，强约束避免无代价膨胀）；可预研 **U-6** 回合内角色交互/反应链；见 next-iteration 当前焦点第 3 项。
+
+### 角色独立演进（阶段 2 编码）：GrowthGuard 强约束
+
+- **背景**：落地设计文档 §6 强约束——对阶段 1b 的迁移做叙事一致性校验，避免「无铺垫神跳级/无代价收益/立场反转」与目标动机抖动；校验失败**拒绝写回**或做**最小安全迁移**（钳制到界限），并把「被拒/被钳」记为 `transition_log` 告警条目（含失败规则与原因），满足 §7.1 可观测。
+- **`GrowthGuard`（`src/runtime/character_growth.py`）**：确定性、非 LLM，四类校验与 §6 一一对应——
+  1. **无代价收益禁止**（`balance_required`）：纯收益规则（`resource_gain`/`goal_affirmed`）缺同事件代价或既有积欠（`_has_prior_cost` 查 `损耗/人情债/伤势损耗/应激/创伤`）时被 `skipped`。
+  2. **关系连续性**：同回合同时命中正向关系（`rescue_debt`/`romance`）与负向关系（`conflict_showdown`/`trusted_betrayal`）→ 跳过正向关系（避免「无事件铺垫立场反转」）。
+  3. **目标切换冷却**（`goal_cooldown_turns`，默认 3）：目标类规则（`goal_affirmed`/`trusted_betrayal`/`deep_loss`）距上次目标变动不足冷却窗口时被 `skipped`（扫 `transition_log` 取最近目标回合）。
+  4. **单回合跃迁边界**（`per_turn_delta_cap`，默认 3）：迁移后对计数维度净增超界做**最小安全迁移**钳制到 `old+cap`（`clamp`）——由于同事件多规则可累加同键（如 `损耗` 由 `horror_trap`+`resource_loss` 各 +1），单事件也会产生越界而被钳制。
+- **入口**：`GrowthGuard.decide(fired, state, bundle)->(allowed, decisions)`，`apply_growth_transition_guarded(state, bundle, guard)->(state, fired, decisions)`（`guard=None` 时与无约束 `apply_growth_transition` 等价，兼容既有壳）；`apply_growth_transition_for_turn` 增 `guard` 参数并返回 `(results, guard_audit)`。
+- **接线**：`orchestrator.apply_event_and_state_write` 传入默认 `GrowthGuard()`；`guard_audit` 中被拒/被钳条目打 `logger.info`（含角色/规则/原因）。
+- **测试**：`test_character_growth.py` 新增 9 条——`guard=None` 等价、无代价收益被拒、有代价/有积欠放行、目标冷却跳过/超窗放行、同回合立场反转跳过正向、界内不钳、越界钳制并记告警。全量 **291 通过 + 1 跳过（live）**。
+- **下一步**：可预研 **U-6**（回合内角色二次反应/对话链）、成长状态注入角色/范围 prompt（`format_growth_snippet` 消费）；见 next-iteration 当前焦点第 3 项。
+
+### 角色独立演进（成长状态注入 prompt）：角色 + 范围叙事者
+
+- **背景**：成长状态机三阶段（1a/1b/2）已落库并有 `format_growth_snippet`，但尚未供 agent 消费——关键角色行为不受自身成长驱动、主叙述与主角演进脱节。本次把成长状态注入**角色 prompt**（让每个关键角色决策真实反映其五维成长）与**范围叙事者 prompt**（让「单一主角导出」的叙述与在场角色演进一致）。
+- **角色侧（`src/agents/character/agent.py`）**：`turn()` 有 `data_root` 时 `load_growth_state` + `format_growth_snippet`，经 `_build_character_prompt` 新参 `growth_snippet` 注入「当前目标」之后；并加一句引导「成长状态影响言行判断，但不主动念出状态名目」。无成长文件则该块不注入（保持既有壳行为）。
+- **范围侧**：新增 `character_growth.format_present_growth_snippet(data_root, characters_config, present_ids)` 汇总**在场**关键角色的非空成长（按名标注，全空返回空串）；`TurnContext` 加 `present_growth_snippet` 字段并贯通 `build_turn_context(_from_storage)`；编排器 `run_one_turn` 在 `data_root` 门内计算并注入；`ScopeAgent._build_scope_prompt` 在主要角色名册之后渲染。
+- **测试**：`test_stage1a_wiring.py` 新增 5 条——角色注入自身成长（含空模板不注入）、聚合 helper（只含非空在场角色、全空为空串）、范围注入在场成长、范围空成长不注入。全量 **296 通过 + 1 跳过（live）**。
+- **下一步**：可预研 **U-6**（回合内角色二次反应/对话链）；见 next-iteration 当前焦点第 3 项。
+
+### U-6：回合内角色二次反应链（先发批 → 定向二次批 → 合并）
+
+- **背景**：成长状态机收口后，多角色场面的单回合仍是并行拼接——各角色独立产出言行，没有「听到对方、再回应」。U-6（backlog 第 6 项）要形成真实对话链，且依赖 §4.6 信息视野（只回应可见部分）。
+- **两波模型（`src/orchestrator/orchestrator.py::run_one_turn` + `_apply_react_chain`）**：
+  - **先发批**：现有并行 `turn(ctx)` 产出各角色首波（不变）。
+  - **定向二次批**：`react_chain` 开关（`runtime_config.agents.characters.react_chain`，默认关）且在场 ≥2 个已注册角色时，为每角色并行 `CharacterAgent.react_to_peers(ctx, peers_snippet)`——peers_snippet 只含其他在场角色的**公开 `dialogue_action`**（同场可闻），**不注入任何他人 `inner_monologue`**（私有内心不跨角色，承接 §4.6）。
+  - **合并**：把二次反应并入该角色 `dialogue_action`/`inner_monologue`；`CharacterTurnOutput` 增 `reaction` 字段供观测；写回/记忆/成长不变。
+- **`CharacterAgent.react_to_peers`（`src/agents/character/agent.py`）**：精简 prompt「你已先行说过话；你听到在场其他角色的公开言行：…；请对其中与你相关的一人给出一段简短回应」，复用 `get_llm_provider`/`_parse_character_llm_response`；Dummy/异常 → 空 reaction。
+- **配置**：`src/config/__init__.py` 默认 `agents.characters` 增 `react_chain: False`。
+- **测试**：新增 `tests/unit/test_react_chain.py` 4 条——默认关无二波、开关开两波合并 + `reaction` 字段、**B 的 peers_snippet 不含 A 私有 inner（负例不泄）**、仅 1 个在场不触发二波。全量 **300 通过 + 1 跳过（live）**。
 
 ---
 

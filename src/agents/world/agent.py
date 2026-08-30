@@ -43,6 +43,8 @@ def _build_scope_prompt(
     ]
     if main_characters_snippet:
         lines.extend(["", main_characters_snippet])
+    if ctx.present_growth_snippet:
+        lines.extend(["", ctx.present_growth_snippet])
     lines.extend([
         "",
         "【最近事件】",

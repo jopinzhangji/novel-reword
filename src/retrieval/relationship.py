@@ -9,6 +9,9 @@ from src.runtime.relationship_graph import (
     get_neighbors as _get_neighbors,
     get_relation as _get_relation,
     get_relation_change_log as _get_relation_change_log,
+    infer_scene_relation,
+    sync_semantic_relations_from_event,
+    upsert_semantic_edge,
 )
 
 

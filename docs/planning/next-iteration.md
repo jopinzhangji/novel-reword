@@ -6,11 +6,12 @@
 
 1. **MVP-1b**：设定 **章节大纲** → 首版 `book/outline/outline.yaml`（**API**：`outline_store.materialize_outline_from_setting_research`；主流程内一键入口可后续再接）。  
 2. **MVP-2**：按 [outline-mvp-plan.md](./outline-mvp-plan.md) §5 推进 **`progress.yaml`** 与作者在环写回（`[大纲进度]` 已有日志基础）。  
-3. **并行**：任务 E（初稿→终态书名 E2E）、小说级路径收口、成长状态机 MVP、`run_novel_with_author` LLM 连续超时降级。  
-4. **工程主线（作者在环）**：**Harness R7 子步** **R7e/R8** ✅（阶段二 **`MEMORY_PLAN_REVIEW`** 可观测日志；阶段一 Harness 统一 **`MAIN_WRITING_REVIEW`** 日志 + `test_author_harness_design_main` 检索链断言）；后续以 **大纲 MVP-1b/2**、任务 E 等为主；产品级概念见 **§「产品级路线」**。  
-5. **上下文压缩（文档 ✅；编码待 CC-b～）**：[design/context-compression-adaptive-layered.md](../design/context-compression-adaptive-layered.md)（**D8**）— 自适应分层任务锚定、Compression Contract；与 **U-1** 检索治理互链；落地阶段见该文 §8 与下方 **待办**。
-6. **智能体基础方案增强（新）**：补齐 Harness **I0–I6**（动态规则加载、自我迭代 Critic/PolicyUpdater、受控联网 Tool/Playwright 路线）；**I5 最小实现 ✅**；下一步 **I6** 或 **CC-b**，不与大纲主线硬冲突。
-7. **小说作者在环工作台（D9）**：[design/novel-reader-ui.md](../design/novel-reader-ui.md) — **阅览 + 与 CLI 等价的作者在环交互**（设定 `c`/讨论、每章回合审阅）；`WebInputAdapter` ↔ `read_line`；**系统设置** `/system`（LLM/工作台/联网）；**W0 ✅**；编码 **W1 阅览 → W2 壳+系统设置只读 → W3 设定交互+配置可写 → W4 正篇交互**。
+3. **角色成长状态机 MVP**：两层模型 **多视角内部模拟 ⊕ 单一主角导出**（§1.2a）——内部所有关键角色（含主角）各持独立经历/记忆/知情视野/成长、多视角对等演进（真实世界式）；导出时用户从关键角色中选一为叙事主角、主书以其为镜头重导出（`protagonist.py` 单主角导出保留）。设计文档已对账优化（doc 闸 ✅，见 [character-growth-state-machine.md](../design/character-growth-state-machine.md)）。按下文 §9 推进顺序：**阶段 1a**（§4.6 信息视野 + §4.5 语义关系边 + §2 成长状态骨架；`src/retrieval/info_view.py`、`src/runtime/character_growth.py`、`relationship_graph.upsert_semantic_edge`）**✅ 已完成编码** → **阶段 1b**（五维 `CharacterGrowthState` 迁移规则 + `apply_growth_transition`/`apply_growth_transition_for_turn`，接入 `storage.emotions[]`）**✅ 已完成编码** → **阶段 2**（`GrowthGuard` 强约束：无代价收益禁止/目标冷却/关系连续性/单回合越界钳制 + 告警审计）**✅ 已完成编码**。**前置＝本次文档闸（✅）；阶段 1a/1b/2 全部落地**；成长状态已注入角色 + 范围叙事者 prompt（`format_growth_snippet`/`format_present_growth_snippet` 消费）；**U-6 回合内二次反应链**（`react_chain` 开关、先发批→定向二次批→合并、只回公开言行不泄私有内心）**✅ 已落地**；**三层记忆分层落库 ✅**（§4.3：L1 事实 append-only / L2 解释 upsert / L3 策略 ttl 过期，`agents.characters.memory_layers` 默认关，确定性无 LLM，检索可开关注入自身 L2/L3，无跨角色泄露）。  
+4. **并行**：任务 E（初稿→终态书名 E2E）、小说级路径收口、`run_novel_with_author` LLM 连续超时降级。  
+5. **工程主线（作者在环）**：**Harness R7 子步** **R7e/R8** ✅（阶段二 **`MEMORY_PLAN_REVIEW`** 可观测日志；阶段一 Harness 统一 **`MAIN_WRITING_REVIEW`** 日志 + `test_author_harness_design_main` 检索链断言）；后续以 **大纲 MVP-1b/2**、任务 E 等为主；产品级概念见 **§「产品级路线」**。  
+6. **上下文压缩（文档 ✅；编码待 CC-b～）**：[design/context-compression-adaptive-layered.md](../design/context-compression-adaptive-layered.md)（**D8**）— 自适应分层任务锚定、Compression Contract；与 **U-1** 检索治理互链；落地阶段见该文 §8 与下方 **待办**。
+7. **智能体基础方案增强（新）**：补齐 Harness **I0–I6**（动态规则加载、自我迭代 Critic/PolicyUpdater、受控联网 Tool/Playwright 路线）；**I5 最小实现 ✅**；下一步 **I6** 或 **CC-b**，不与大纲主线硬冲突。
+8. **小说作者在环工作台（D9）**：[design/novel-reader-ui.md](../design/novel-reader-ui.md) — **阅览 + 与 CLI 等价的作者在环交互**（设定 `c`/讨论、每章回合审阅）；`WebInputAdapter` ↔ `read_line`；**系统设置** `/system`（LLM/工作台/联网）；**W0 ✅**；编码 **W1 阅览 → W2 壳+系统设置只读 → W3 设定交互+配置可写 → W4 正篇交互**。
 
 ---
 
@@ -133,10 +134,11 @@
 | 1 | **U-1** | **检索与 Tool 底座** | **P2** 方向：在统一注册表下叠渐进树路由、本地关键字、变种扩展、可选向量；**检索完整方案**首次成文可作为**总册**，后续条目增量修订。 |
 | 2 | **U-2** | **R7/R8 审阅路径** | R7c–R7d 及 R8 可观测稳定后，审阅专用链路与 **U-1** 共用底层能力；**检索完整方案**增 **审阅** 章节。 |
 | 3 | **U-3** | **记忆注入路径扩展** | 正文生成、修订、驳回重试等步骤按需注入片段；**检索完整方案**增 **生成/修订** 章节与预算表。 |
-| 4 | **U-4** | **大纲 / 成长 / 关系** | 叙事状态相关摘要与检索入口（与 `outline_store`、成长状态机、图谱等衔接）；**检索完整方案**增 **数据源与工具行** 。 |
+| 4 | **U-4** | **大纲 / 成长 / 关系** | 叙事状态相关摘要与检索入口（与 `outline_store`、成长状态机、图谱等衔接）；**检索完整方案**增 **数据源与工具行** ；对齐 [character-growth-state-machine.md](../design/character-growth-state-machine.md) 的 **§4.6 信息视野**——按角色可见性（private/scene_known/public）过滤的事件视图作为检索返回，作为成长 MVP 阶段 1a 的前置约定。 |
 | 5 | **U-5** | **设定研究与 DevAgent（P3）** | 设定产出纳入统一检索与索引策略；DevAgent 记录检索失败与缺口；**检索完整方案**增 **自检与运维** 条目。 |
+| 6 | **U-6** | **回合内角色交互 / 反应链** | 多视角内部模拟下，关键角色在当前回合内可对彼此言行**二次反应**（先发批 → 定向二次批 → 合并），形成真实对话链而非并行拼接；依赖 **§4.6 信息视野**（各角色只回应其可见部分）。**✅ 已落地**（`react_chain` 开关默认关；peers_snippet 只注入在场他人公开 `dialogue_action`、不泄私有内心）。 |
 
-**与近期主线**：**不替代**当前 **大纲 MVP-1b/2**、任务 E、小说级路径等（**Harness R7 含 R7e/R8** 已 ✅）；**U-*** 在近期里程碑达到可接受质量后**按需**启动；**U-1** 宜作为 **U-2～U-5** 的共用底座（可并行文档预研，**不设代码抢先**）。
+**与近期主线**：**不替代**当前 **大纲 MVP-1b/2**、任务 E、小说级路径等（**Harness R7 含 R7e/R8** 已 ✅）；**U-*** 在近期里程碑达到可接受质量后**按需**启动；**U-1** 宜作为 **U-2～U-6** 的共用底座（可并行文档预研，**不设代码抢先**）。
 
 ---
 

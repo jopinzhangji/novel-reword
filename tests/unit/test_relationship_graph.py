@@ -3,10 +3,13 @@ from src.runtime.relationship_graph import (
     get_neighbors,
     get_relation,
     get_relation_change_log,
+    infer_scene_relation,
     load_graph,
     relationship_graph_yaml_path,
     upsert_co_presence_edge,
+    upsert_semantic_edge,
     sync_relationship_graph_after_scope_turn,
+    sync_semantic_relations_from_event,
 )
 from src.retrieval.relationship import format_relation_snippet
 
@@ -142,3 +145,75 @@ def test_sync_relationship_graph_after_scope_turn(tmp_path):
     assert edge is not None
     assert edge["type"] == "co_presence"
     assert "capital.turn_0001" in edge["evidence_events"]
+
+
+def test_infer_scene_relation_hits_and_misses():
+    assert infer_scene_relation("二人剑拔弩张对峙于长街") == "rival"
+    assert infer_scene_relation("她将身家性命托付于他") == "trust"
+    assert infer_scene_relation("商议明日行程") is None
+
+
+def test_upsert_semantic_edge_creates_typed_edge():
+    graph = default_dict()
+    edge = upsert_semantic_edge(
+        graph,
+        source_id="lin_yuan",
+        target_id="su_wan",
+        rel_type="trust",
+        intensity="high",
+        status="active",
+        direction="su_wan->lin_yuan",
+        evidence_event="capital.turn_0007",
+        turn_index=7,
+        scope_id="capital",
+        reason="以性命相托",
+    )
+    assert edge["type"] == "trust"
+    assert edge["direction"] == "su_wan->lin_yuan"
+    assert get_relation(graph, "lin_yuan", "su_wan") is not None
+
+
+def test_upsert_semantic_edge_accumulates_evidence_no_dup():
+    graph = default_dict()
+    for _ in range(2):
+        upsert_semantic_edge(
+            graph,
+            source_id="a", target_id="b", rel_type="ally",
+            evidence_event="capital.turn_0001", turn_index=1, scope_id="capital",
+        )
+    edge = get_relation(graph, "a", "b")
+    assert len(edge["evidence_events"]) == 1  # 去重
+    assert edge["type"] == "ally"
+
+
+def test_sync_semantic_relations_upgrades_when_keyword_hits():
+    from src.runtime.relationship_graph import default_graph
+    graph = default_graph()
+    touched = sync_semantic_relations_from_event(
+        graph,
+        scope_id="capital", turn_index=5,
+        present_character_ids=["b", "a"],
+        event_summary="二人针锋相对冲突升级",
+    )
+    assert len(touched) == 1
+    edge = get_relation(graph, "a", "b")
+    assert edge["type"] == "rival"
+    assert "capital.turn_0005" in edge["evidence_events"]
+
+
+def test_sync_semantic_relations_noop_without_keyword():
+    from src.runtime.relationship_graph import default_graph
+    graph = default_graph()
+    touched = sync_semantic_relations_from_event(
+        graph,
+        scope_id="capital", turn_index=5,
+        present_character_ids=["a", "b"],
+        event_summary="商议明日行程",
+    )
+    assert touched == []
+    assert get_relation(graph, "a", "b") is None  # 无命中不建边
+
+
+def default_dict():
+    from src.runtime.relationship_graph import default_graph
+    return default_graph()
