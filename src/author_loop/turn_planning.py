@@ -289,6 +289,7 @@ def build_turn_body_prompt(
     outline_snippet: str = "",
     pacing_prompt_block: str = "",
     main_characters_snippet: str = "",
+    bridging_snippet: str = "",
 ) -> str:
     """拼本回合小说正文的 prompt：基于写作前分析、Scope 约束与事件摘要、角色言行及作者补充要求，输出一段连贯正文。"""
     scope = result.scope_output
@@ -303,6 +304,8 @@ def build_turn_body_prompt(
         plan.analysis,
         "",
     ]
+    if (bridging_snippet or "").strip():
+        parts.extend([bridging_snippet.strip(), ""])
     if (main_characters_snippet or "").strip():
         parts.extend([main_characters_snippet.strip(), ""])
     if (outline_snippet or "").strip():
@@ -348,6 +351,7 @@ def generate_turn_body(
     chapter_goal: str = "",
     requested_pace_mode: str | None = None,
     main_characters_snippet: str = "",
+    bridging_snippet: str = "",
 ) -> str:
     """
     基于写作前分析与本回合 TurnResult，生成本回合小说正文，不超过 max_chars 字。
@@ -382,6 +386,7 @@ def generate_turn_body(
             outline_snippet=outline_snippet or "",
             pacing_prompt_block=pacing_prompt_block,
             main_characters_snippet=main_characters_snippet,
+            bridging_snippet=bridging_snippet or "",
         )
         raw = provider.generate(prompt)
         body = (raw or "").strip()

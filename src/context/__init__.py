@@ -22,6 +22,7 @@ class TurnContext:
     world_constraints: str | None = None
     secondary_characters_snippet: str | None = None
     present_growth_snippet: str = ""
+    bridging_snippet: str = ""
 
     def __post_init__(self) -> None:
         if not self.scope_id:
@@ -40,6 +41,7 @@ def build_turn_context(
     world_constraints: str | None = None,
     secondary_characters_snippet: str | None = None,
     present_growth_snippet: str = "",
+    bridging_snippet: str = "",
 ) -> TurnContext:
     """
     从显式参数构建 TurnContext。
@@ -56,6 +58,7 @@ def build_turn_context(
         world_constraints=world_constraints,
         secondary_characters_snippet=secondary_characters_snippet,
         present_growth_snippet=present_growth_snippet,
+        bridging_snippet=bridging_snippet,
     )
 
 
@@ -70,6 +73,7 @@ def build_turn_context_from_storage(
     recent_events_k: int = 5,
     secondary_characters_limit: int = 30,
     present_growth_snippet: str = "",
+    bridging_snippet: str = "",
 ) -> TurnContext:
     """
     从 Storage 与可选世界配置组装 TurnContext。
@@ -110,4 +114,5 @@ def build_turn_context_from_storage(
         world_constraints=None,
         secondary_characters_snippet=secondary_snippet,
         present_growth_snippet=present_growth_snippet,
+        bridging_snippet=bridging_snippet,
     )

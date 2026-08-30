@@ -1,7 +1,7 @@
 # G1 SDD：屏外线 / 并列主线（Off-screen Evolution + Bridging）
 
 **代号**：**G1**（全仓梳理 2026-08-31 三大优化主轴之首）；对应 [outline-and-beats.md](./outline-and-beats.md) **Phase 3**。
-**类型**：SDD（L2）。**登记**：**[SPEC_SDD.md](../framework/SPEC_SDD.md) D10**。**状态**：**G1a 已编码 ✅**（2026-08-31）；G1b/G1c 待立项。
+**类型**：SDD（L2）。**登记**：**[SPEC_SDD.md](../framework/SPEC_SDD.md) D10**。**状态**：**G1a 已编码 ✅、G1b 已编码 ✅**（2026-08-31）；G1c 待立项。
 
 ---
 
@@ -145,7 +145,7 @@ runtime:
 | 阶段 | 内容 | 验收 |
 |------|------|------|
 | **G1a 数据与演进** | `storage/file_sync/memory_layers` 增 `threads`/`off_screen`；`append_off_screen_refinement` + `apply_off_screen_transition_for_turn`（replay 迁移 + GrowthGuard） | 单测：屏外条目落盘 round-trip；按标签触发演进、非在场角色状态可增长、主书事件簿不变 |
-| **G1b 桥接注入** | `TurnContext.bridging_snippet` + `build_turn_body_prompt` 块 + 桥接菜单（作者补充 / 勾选）；`format_bridging_snippet` | 单测：需桥接时块入库；未触发时正文 prompt 无桥接（默认关）；桥接来源可追溯 |
+| **G1b 桥接注入** | `TurnContext.bridging_snippet` + `build_turn_body_prompt` 块 + 桥接菜单（作者补充 / 勾选）；`format_bridging_snippet` | ✅（2026-08-31）：`bridging.py` + `TurnContext.bridging_snippet` + `build_turn_body_prompt`/`generate_turn_body` 块 + 回环按 `runtime.parallel_threads.enabled`/`bridge_ids` 门控注入；9 条单测，全量 347 通过 |
 | **G1c 批处理（可选）** | `trigger=batch`：每 `batch_turns` 扫一次各角色 `threads` 累积演进 | 单测：批次触发、无新戏不空转 |
 
 ---

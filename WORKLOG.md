@@ -7,7 +7,7 @@
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点：G1–G3 方向主轴 + W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测，全量 **338 通过 + 1 跳过**）；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
+| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测）、**G1b 桥接注入 ✅**（`bridging.py` + `TurnContext.bridging_snippet` + 正文 prompt 桥接块 + 回环按 `parallel_threads.enabled`/`bridge_ids` 门控注入，9 条单测，全量 **347 通过 + 1 跳过**）；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
 | **当前优先** | **方向**：**多视角独立演进 ⊕ 单一主角导出** + **用户可调**（增强默认关、可开可关）。**G 系列**：**G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3，最对齐空白）→ **G2 演进层 ↔ 策略层耦闸**（成长/关系/视野进 PacingContract/Critic，节拍 tags 实影响成长）→ **G3 用户可调收敛 + 运行时主角切换**（D9 `/system` 可写出口）。**续工程**：**D9 W1→W4**、**CC-b**、**I6**、任务 E、同文导出。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
 
@@ -54,6 +54,20 @@
 - **`src/runtime/character_growth.py`**：新增 `apply_off_screen_transitions(storage, data_root, *, character_id, entries, guard)`——把一批屏外条目**批量回放**进该角色成长状态（复用 `apply_growth_transition_guarded` + `GrowthGuard`），落盘 `growth_state.yaml`、mind 变化写 emotions；**不经过主书 scope 事件簿**；返回 `(fired, guard_audit)`。跨条目平衡得以体现（先损耗后可收益放行、无代价收益被拒）。
 - **测试**：新增 `tests/unit/test_off_screen_threads.py` 9 条——thread 字段向后兼容、storage 桶隔离、YAML round-trip、非在场角色屏外演进、growth_state 落盘+回读、GrowthGuard 无代价收益被拒 / 先损耗后收益放行、无命中不变。全量回归 **338 通过 + 1 跳过（live）**（基线 329 + 9）。
 - **下一步**：**G1b**（`TurnContext.bridging_snippet` + `build_turn_body_prompt` 桥接块 + 触发/桥接菜单），再 **G1c**（可选批处理）。
+
+## 2026-08-31（再续二）
+
+### G1b 编码：桥接摘要注入（屏外结果带回主书）
+
+- **范围**：SDD D10 §8 **G1b**——当主书下一场景依赖某**非在场**角色屏外结果时，向正文生成注入一段规则截断的短摘要；默认关（`runtime.parallel_threads.enabled=false`），不改变无桥接场景行为。
+- **新增 `src/retrieval/bridging.py`**：
+  - `format_bridging_snippet(entries, name="", budget_chars=400)`——纯格式化：把该角色最近屏外条目拼成 `【桥接摘要（<name> 屏外结果）】` 块，预算截断；空条目返回空串。
+  - `build_bridging_snippet_from_storage(storage, present_character_ids, parallel_threads_cfg, characters_config)`——enabled=false 或未给 `bridge_ids` → 空串；对每个明示 `bridge_ids` 且**非在场**角色取 `storage.get_recent_off_screen` 组装，已在场角色跳过（主书仍主角轴，§5.3）。
+- **`src/context/__init__.py`**：`TurnContext` 增 `bridging_snippet: str = ""` 字段，贯通 `build_turn_context` 与 `build_turn_context_from_storage`（默认为空，向后兼容）。
+- **`src/author_loop/turn_planning.py`**：`build_turn_body_prompt` / `generate_turn_body` 增 `bridging_snippet=""` 参数；块渲染置于写作前分析之后、主要角色名册之前（§5.2）。
+- **`run_novel_with_author.py`**：回环内按 `runtime.parallel_threads.enabled`（默认 false）+ `bridge_ids` 门控，从 `orch.storage` `build_bridging_snippet_from_storage` 组装并传入两处 `generate_turn_body`；缺配置/异常 → 空串，船身不破。
+- **测试**：新增 `tests/unit/test_bridging.py` 9 条——`format_bridging_snippet` 空/标签/预算截断；`build_bridging_snippet_from_storage` 默认关、`bridge_ids` 明示、已在场跳过、无条目空串；`TurnContext` 字段往返；`build_turn_body_prompt` 有桥接块/无桥接块。全量回归 **347 通过 + 1 跳过（live）**（基线 338 + 9）。
+- **下一步**：**G1c（可选）**（`trigger=batch`：每 `batch_turns` 扫一次各角色 `threads` 累积演进），加载态桥接菜单作者补屏外戏/勾选留后续。
 
 ---
 

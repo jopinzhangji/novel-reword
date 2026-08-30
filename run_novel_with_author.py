@@ -396,12 +396,30 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             world_config=orch.world_config,
             last_turn_summary=last_summary,
         )
+        # G1b 桥接：仅当 runtime.parallel_threads.enabled=true 且配置了 bridge_ids 时才注入屏外结果摘要。
+        # 默认关闭（false/无配置）→ 空串，不改变主书正文行为。
+        pt_cfg = runtime.get("parallel_threads") or {}
+        if not pt_cfg:
+            pt_cfg = (runtime.get("runtime") or {}).get("parallel_threads") or {}
+        bridging_snippet = ""
+        if pt_cfg and bool(pt_cfg.get("enabled", False)):
+            try:
+                from src.retrieval.bridging import build_bridging_snippet_from_storage
+                bridging_snippet = build_bridging_snippet_from_storage(
+                    storage=orch.storage,
+                    present_character_ids=present,
+                    parallel_threads_cfg=pt_cfg,
+                    characters_config=orch.characters_config,
+                )
+            except Exception:
+                bridging_snippet = ""
         body = generate_turn_body(
             plan, result, ctx, runtime,
             max_chars=max_chars_this_turn,
             author_requirements=author_requirements,
             outline_snippet=outline_snippet,
             main_characters_snippet=main_characters_snippet,
+            bridging_snippet=bridging_snippet,
         )
         result.body_narrative = body
         approved, result_phase1 = review_turn_result(
@@ -463,6 +481,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
                         author_requirements=author_requirements,
                         outline_snippet=outline_snippet,
                         main_characters_snippet=main_characters_snippet,
+                        bridging_snippet=bridging_snippet,
                     )
                     result.body_narrative = body
                     approved, result_phase1 = review_turn_result(
