@@ -15,7 +15,7 @@ framework:
   llm: openai_compatible     # 当前用 OpenAI 兼容端点（火山方舟 deepseek-v4-pro）；未配置密钥时回退 dummy；通义千问用 tongyi
   llm_options:
     api_key_env: "DASHSCOPE_API_KEY"
-    model: "deepseek-v4-pro"
+    model: "deepseek-v4-flash"
     base_url: "https://ark.cn-beijing.volces.com/api/coding/v3"
     timeout: 180            # 单次请求超时（秒）；长上下文讨论可再调高或改 framework.llm_options
     max_retries: 1          # 网络/超时重试次数（不含首轮）
