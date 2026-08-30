@@ -47,7 +47,7 @@ from src.runtime.outline_store import (
     outline_injection_options,
     resolve_current_beat,
 )
-from src.runtime.protagonist import resolve_protagonist_id
+from src.runtime.protagonist import format_main_characters_snippet, resolve_protagonist_id
 
 
 def main(input_fn: Callable[[str], str] | None = None) -> None:
@@ -265,6 +265,9 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
         )
 
     last_summary = ""
+    main_characters_snippet = format_main_characters_snippet(runtime, orch.characters_config)
+    if main_characters_snippet:
+        log.debug("[主角注入] 已生成主角与主要角色提示块")
     for turn in range(n):
         log.info("===== 回合 %s/%s =====", turn + 1, n)
         outline_snippet = ""
@@ -302,6 +305,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             last_turn_summary=last_summary,
             project_root=PROJECT_ROOT,
             outline_snippet=outline_snippet,
+            main_characters_snippet=main_characters_snippet,
         )
         log.info("--- 本回合写作前分析 ---")
         log.info("%s", plan.analysis)
@@ -377,6 +381,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             max_chars=max_chars_this_turn,
             author_requirements=author_requirements,
             outline_snippet=outline_snippet,
+            main_characters_snippet=main_characters_snippet,
         )
         result.body_narrative = body
         approved, result_phase1 = review_turn_result(
@@ -437,6 +442,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
                         max_chars=max_chars_this_turn,
                         author_requirements=author_requirements,
                         outline_snippet=outline_snippet,
+                        main_characters_snippet=main_characters_snippet,
                     )
                     result.body_narrative = body
                     approved, result_phase1 = review_turn_result(

@@ -7,7 +7,7 @@
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点** + **W 系列 W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）；**2026-08-27** **Linux 迁移收口**（开发环境文档 Linux 化、入口 EOF 健壮性、过时状态描述修正，全量 251 通过）；**2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
+| **近期已完成** | **2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）与**主角姓名一致性修复**（主线叙事者 prompt 注入主角名册，全量 257 通过）；**2026-08-27** **Linux 迁移收口**（开发环境文档 Linux 化、入口 EOF 健壮性、过时状态描述修正，全量 251 通过）；**2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
 | **当前优先** | **工程主线**：**MVP-2**、任务 E；**D9 工作台**：W1→W2→**W3 设定交互**→**W4 章节交互**；**CC-b**；**I6**。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
 
@@ -23,6 +23,12 @@
 - **结果**：LLM smoke（`deepseek-v4-pro` 应答正常）+ 全链路 E2E **通过**；正文落盘 `data/book/events/main/events/turn_0001.md`（真实模型产出，含「摘要/正文」段）；日志含「设定阶段结束，进入正篇」「已写回角色记忆」。
 - **收尾**：`.env` 中 `LLM_E2E=1` 已移除（保留 Key），默认 `pytest tests/` 跳过 live 用例；全量 **251 通过 + 1 跳过（live）**。
 - **后续**：回到工程主线 **MVP-2**、任务 E、**D9 工作台 W1**、**CC-b**、**I6**（见 [docs/planning/next-iteration.md](./docs/planning/next-iteration.md)）。
+
+### 主角姓名一致性修复（主线叙事者注入主角名册）
+
+- **问题**：真实 LLM 联调生成的正文中，主线叙述把主角写成了「苏明」，而 `characters.yaml` 定义的是「林昭」。根因：**ScopeAgent（范围/主线叙事者）的 prompt 未注入主角姓名与关键角色名册**，模型自行虚构姓名；`build_turn_plan_prompt` / `build_turn_body_prompt` 同理。
+- **修复**：新增 `src/runtime/protagonist.py::format_main_characters_snippet(runtime_config, characters_config)`，复用 `resolve_protagonist_id` 生成「【主角与主要角色】」提示块（叙事主角 + 主要角色名册 + 「不得虚构或替换主角姓名、以主角为镜头主轴」约束）；无主角时返回空串。注入三处：`ScopeAgent._build_scope_prompt`、`build_turn_plan_prompt`、`build_turn_body_prompt`（`Orchestrator.from_config` 向 ScopeAgent 传 `characters_config`；`run_novel_with_author.py` 计算一次并传入计划/正文两阶段）。补齐 MVP-1「正文以主角为主线」对**大纲文件缺失时**的主角注入。
+- **测试**：新增 6 条单测（`test_protagonist.py`×3、`test_agent_shells.py`×1、`test_turn_planning_pacing.py`×2），断言主角名与「不得虚构」约束出现在 scope/plan/body prompt；全量 **257 通过 + 1 跳过（live）**。
 
 ---
 

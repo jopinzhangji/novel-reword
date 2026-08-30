@@ -107,6 +107,7 @@ class Orchestrator:
                 storage=storage,
                 runtime_config=runtime,
                 world_config=world,
+                characters_config=characters,
             )
             for sid in enabled_scope
         }

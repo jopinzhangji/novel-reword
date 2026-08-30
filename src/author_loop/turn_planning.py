@@ -40,6 +40,7 @@ def build_turn_plan_prompt(
     author_memory_snippet: str = "",
     outline_snippet: str = "",
     pacing_prompt_block: str = "",
+    main_characters_snippet: str = "",
 ) -> str:
     """拼写作前分析 + 预计字数的 prompt，仅要求 LLM 输出分析与本回合预计字数。"""
     name = scope_info.get("name") or ctx.scope_id
@@ -56,6 +57,10 @@ def build_turn_plan_prompt(
         "",
         f"范围：{name}（{ctx.scope_id}），时间：{ctx.time}，地点：{ctx.place}。",
         f"设定概览：{desc}" if desc else "",
+    ]
+    if (main_characters_snippet or "").strip():
+        lines.extend(["", main_characters_snippet.strip()])
+    lines.extend([
         "",
         "关键规则：本阶段“设定概览”只用于提供基础背景。",
         "只有当你从【最近事件/前文】或【最近剧情】或【本段涉及的其他角色（次要角色列表）】中判断：当前场景确实需要某类设定细节来解释行动/因果/规则时，才在你的分析中简要点出需要深挖的设定维度。",
@@ -70,7 +75,7 @@ def build_turn_plan_prompt(
         f"最近剧情：{ctx.shared_story_snippet or '（无）'}",
         (ctx.secondary_characters_snippet or ""),
         "",
-    ]
+    ])
     if (outline_snippet or "").strip():
         lines.extend([outline_snippet.strip(), ""])
     if (pacing_prompt_block or "").strip():
@@ -132,6 +137,7 @@ def generate_turn_plan_for_turn(
     outline_snippet: str = "",
     chapter_goal: str = "",
     requested_pace_mode: str | None = None,
+    main_characters_snippet: str = "",
 ) -> TurnPlan:
     """
     根据当前回合上下文生成本回合写作前分析及预计字数（供主流程先呈现、作者同意后再生成正文）。
@@ -174,6 +180,7 @@ def generate_turn_plan_for_turn(
         outline_snippet=outline_snippet,
         chapter_goal=chapter_goal,
         requested_pace_mode=requested_pace_mode,
+        main_characters_snippet=main_characters_snippet,
     )
 
 
@@ -186,6 +193,7 @@ def generate_turn_plan(
     outline_snippet: str = "",
     chapter_goal: str = "",
     requested_pace_mode: str | None = None,
+    main_characters_snippet: str = "",
 ) -> TurnPlan:
     """
     生成本回合写作前分析及预计字数。若 LLM 不可用则返回占位。
@@ -205,6 +213,7 @@ def generate_turn_plan(
         author_memory_snippet=author_memory_snippet,
         outline_snippet=outline_snippet,
         pacing_prompt_block=pacing_prompt_block,
+        main_characters_snippet=main_characters_snippet,
     )
     try:
         from src.llm import get_llm_provider
@@ -279,6 +288,7 @@ def build_turn_body_prompt(
     author_requirements: str = "",
     outline_snippet: str = "",
     pacing_prompt_block: str = "",
+    main_characters_snippet: str = "",
 ) -> str:
     """拼本回合小说正文的 prompt：基于写作前分析、Scope 约束与事件摘要、角色言行及作者补充要求，输出一段连贯正文。"""
     scope = result.scope_output
@@ -293,6 +303,8 @@ def build_turn_body_prompt(
         plan.analysis,
         "",
     ]
+    if (main_characters_snippet or "").strip():
+        parts.extend([main_characters_snippet.strip(), ""])
     if (outline_snippet or "").strip():
         parts.extend([outline_snippet.strip(), ""])
     if (pacing_prompt_block or "").strip():
@@ -335,6 +347,7 @@ def generate_turn_body(
     outline_snippet: str = "",
     chapter_goal: str = "",
     requested_pace_mode: str | None = None,
+    main_characters_snippet: str = "",
 ) -> str:
     """
     基于写作前分析与本回合 TurnResult，生成本回合小说正文，不超过 max_chars 字。
@@ -368,6 +381,7 @@ def generate_turn_body(
             author_requirements=author_requirements or "",
             outline_snippet=outline_snippet or "",
             pacing_prompt_block=pacing_prompt_block,
+            main_characters_snippet=main_characters_snippet,
         )
         raw = provider.generate(prompt)
         body = (raw or "").strip()

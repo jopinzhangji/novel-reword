@@ -55,3 +55,43 @@ def resolve_protagonist_id(
                 pid,
             )
     return pid, display
+
+
+def format_main_characters_snippet(
+    runtime_config: dict[str, Any],
+    characters_config: dict[str, Any] | None,
+) -> str:
+    """
+    生成「主角与主要角色」提示块，供 ScopeAgent（主线叙事者）、写作前分析、正文生成注入，
+    确保主线叙述使用配置的主角姓名，不虚构或替换。无主角或无角色配置时返回空串。
+    与 docs/design/outline-and-beats.md「正文以主角为主线」一致，补齐 MVP-1 主角注入（不依赖大纲文件）。
+    """
+    pid, pname = resolve_protagonist_id(runtime_config, characters_config)
+    if not pid:
+        return ""
+    chars = (characters_config or {}).get("characters") or []
+    protagonist_role = ""
+    other_names: list[str] = []
+    for c in chars:
+        if not isinstance(c, dict):
+            continue
+        name = (c.get("name") or "").strip()
+        if not name:
+            continue
+        role = (c.get("role") or "").strip()
+        if c.get("id") == pid:
+            protagonist_role = role
+        elif name != pname:
+            other_names.append(f"{name}（{role}）" if role else name)
+    lines = ["【主角与主要角色】"]
+    if protagonist_role:
+        lines.append(f"- 叙事主角：{pname}（{protagonist_role}）")
+    else:
+        lines.append(f"- 叙事主角：{pname}")
+    if other_names:
+        lines.append("- 主要角色：" + "、".join(other_names))
+    lines.append(
+        f"本回合叙述以叙事主角「{pname}」为镜头主轴：其姓名与身份须与上述一致，"
+        "不得虚构或替换主角姓名；其他在场角色按上述名单称呼，未列出的次要角色可由剧情动态引入并写入次要角色列表。"
+    )
+    return "\n".join(lines)

@@ -143,3 +143,26 @@ class TestScopeAgentWithMockLLM:
         assert any("不得动武" in c or "动武" in c for c in out.constraints)
         assert "京城" in out.event_summary or "商议" in out.event_summary
         mock_llm.generate.assert_called_once()
+
+    def test_turn_injects_protagonist_name_into_prompt(self):
+        mock_llm = Mock()
+        mock_llm.generate.return_value = "约束：无\n本回合事件摘要：林昭立于堤上，远眺河面。"
+        mock_llm.__class__.__name__ = "MockLLM"
+        with patch("src.llm.get_llm_provider", return_value=mock_llm):
+            agent = ScopeAgent(
+                "capital",
+                storage=None,
+                runtime_config={
+                    "framework": {"llm": "tongyi"},
+                    "runtime": {"novel_run": {"protagonist_id": "hero"}},
+                },
+                world_config={"scopes": [{"id": "capital", "name": "京城"}]},
+                characters_config={
+                    "characters": [{"id": "hero", "name": "林昭", "role": "水利工程师"}]
+                },
+            )
+            agent.turn(_minimal_ctx())
+        prompt = mock_llm.generate.call_args[0][0]
+        assert "林昭" in prompt
+        assert "水利工程师" in prompt
+        assert "不得虚构或替换主角姓名" in prompt

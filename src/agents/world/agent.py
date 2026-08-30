@@ -31,14 +31,19 @@ def _build_scope_prompt(
     scope_info: dict,
     events_snippet: str,
     ctx: TurnContext,
+    main_characters_snippet: str = "",
 ) -> str:
-    """拼范围回合 prompt：场景、最近事件、次要角色。"""
+    """拼范围回合 prompt：场景、主角/主要角色、最近事件、次要角色。"""
     name = scope_info.get("name") or scope_id
     desc = (scope_info.get("description") or "").strip()
     lines = [
         f"你是范围「{name}」（{scope_id}）的叙事者。",
         f"场景：{ctx.place}，时间：{ctx.time}。",
         f"场景说明：{desc}" if desc else "",
+    ]
+    if main_characters_snippet:
+        lines.extend(["", main_characters_snippet])
+    lines.extend([
         "",
         "【最近事件】",
         events_snippet if events_snippet else "（暂无）",
@@ -52,7 +57,7 @@ def _build_scope_prompt(
         "请在上述分析基础上，最后按以下格式输出：",
         "约束：...（一行或列表，本段叙事约束）",
         "本回合正文：...（本回合的场景/事件叙述正文，一段成文，可多行，建议控制篇幅）",
-    ]
+    ])
     return "\n".join(l for l in lines if l is not None)
 
 
@@ -107,11 +112,13 @@ class ScopeAgent:
         storage: Any = None,
         runtime_config: dict | None = None,
         world_config: dict | None = None,
+        characters_config: dict | None = None,
     ) -> None:
         self.scope_id = scope_id
         self._storage = storage
         self._runtime_config = runtime_config or {}
         self._world_config = world_config or {}
+        self._characters_config = characters_config
 
     def turn(self, ctx: TurnContext) -> ScopeTurnOutput:
         """单回合：有 LLM 时拼 prompt、检索事件、调用 LLM 并解析；否则返回壳输出。"""
@@ -129,7 +136,16 @@ class ScopeAgent:
                 from src.retrieval import format_scope_events_snippet
                 events_snippet = format_scope_events_snippet(self._storage, self.scope_id, k=10)
             scope_info = _get_scope_info(self._world_config, self.scope_id)
-            prompt = _build_scope_prompt(self.scope_id, scope_info, events_snippet, ctx)
+            main_characters_snippet = ""
+            if self._characters_config:
+                from src.runtime.protagonist import format_main_characters_snippet
+                main_characters_snippet = format_main_characters_snippet(
+                    self._runtime_config, self._characters_config
+                )
+            prompt = _build_scope_prompt(
+                self.scope_id, scope_info, events_snippet, ctx,
+                main_characters_snippet=main_characters_snippet,
+            )
             raw = provider.generate(prompt)
             constraints, event_summary = _parse_scope_llm_response(raw)
             return ScopeTurnOutput(
