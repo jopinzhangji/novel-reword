@@ -42,10 +42,11 @@ from src.config import current_novel_root, get_initial_scene, load_runtime_confi
 from src.llm import get_llm_provider
 from src.runtime import file_sync as runtime_file_sync
 from src.runtime.outline_store import (
-    build_outline_prompt_snippet,
+    advance_to_next_beat,
+    bump_turns_in_beat,
     load_outline_snapshot,
-    outline_injection_options,
-    resolve_current_beat,
+    resolve_outline_context,
+    save_progress,
 )
 from src.runtime.protagonist import format_main_characters_snippet, resolve_protagonist_id
 
@@ -268,31 +269,50 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
     main_characters_snippet = format_main_characters_snippet(runtime, orch.characters_config)
     if main_characters_snippet:
         log.debug("[主角注入] 已生成主角与主要角色提示块")
+    _outline_warned = False  # Opt-6：首损 WARN 一次、连续失败才降级 debug
     for turn in range(n):
         log.info("===== 回合 %s/%s =====", turn + 1, n)
         outline_snippet = ""
+        outline_beat = None
+        _dr_turn = None
+        _snap_turn = None
         try:
             _dr_turn = runtime_file_sync.get_data_root(PROJECT_ROOT, runtime)
             _snap_turn = load_outline_snapshot(_dr_turn)
-            outline_snippet = build_outline_prompt_snippet(
-                runtime, _snap_turn, orch.characters_config
-            )
-            if _snap_turn and outline_snippet:
-                _opts_turn = outline_injection_options(runtime)
-                if _opts_turn["enabled"]:
-                    _bc = resolve_current_beat(
-                        _snap_turn, soft_max_turns=_opts_turn["soft_max_turns"]
-                    )
-                    if _bc:
-                        log.info(
-                            "[大纲进度] chapter=%s beat=%s turns_in_beat=%s/%s",
-                            _bc.chapter_id,
-                            _bc.beat_id,
-                            _bc.turns_in_beat,
-                            _opts_turn["soft_max_turns"],
-                        )
+            if _snap_turn is not None:
+                # 单次解析（Opt 3/4）：prompt 注入与进度日志、推进写回复用同一 beat
+                outline_snippet, outline_beat = resolve_outline_context(
+                    runtime,
+                    _snap_turn,
+                    orch.characters_config,
+                    protagonist_id=_prot_id,
+                    protagonist_display_name=_prot_name,
+                )
+            if outline_beat and outline_beat.missing_ref:
+                _p = (_snap_turn.progress if _snap_turn and _snap_turn.progress else {})
+                log.warning(
+                    "[大纲] 进度引用到不存在的%s（chapter=%s beat=%s），已回退到 %s/%s",
+                    outline_beat.missing_ref,
+                    _p.get("chapter_id", "?"),
+                    _p.get("beat_id", "?"),
+                    outline_beat.chapter_id,
+                    outline_beat.beat_id,
+                )
+            if outline_beat:
+                log.info(
+                    "[大纲进度] chapter=%s beat=%s turns_in_beat=%s/%s",
+                    outline_beat.chapter_id,
+                    outline_beat.beat_id,
+                    outline_beat.turns_in_beat,
+                    outline_beat.soft_max_turns,
+                )
+            _outline_warned = False
         except Exception as _oe:
-            log.debug("本回合大纲片段构建失败（忽略）: %s", _oe)
+            if not _outline_warned:
+                log.warning("大纲片段构建失败（后续同因降级 debug）: %s", _oe)
+                _outline_warned = True
+            else:
+                log.debug("本回合大纲片段构建失败（忽略）: %s", _oe)
         # 先呈现本回合写作前分析及预计字数，作者同意后再生成本回合正文（≤2000 字）
         plan = generate_turn_plan_for_turn(
             orch.storage,
@@ -463,6 +483,49 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             if not approved or result_phase1 is None:
                 continue
         orch.apply_event_and_state_write(result_phase1, scope_id, time_str, place)
+        # 大纲 MVP-2：作者在环推进（仅当大纲启用且能定位当前节拍时；无静默跳章）
+        if _dr_turn and _snap_turn is not None and outline_beat is not None:
+            _cp = _snap_turn.progress or {}
+            _base = {
+                "version": _cp.get("version", 1),
+                "chapter_id": outline_beat.chapter_id,
+                "beat_id": outline_beat.beat_id,
+                "turns_in_beat": outline_beat.turns_in_beat,
+            }
+            # 无条件 +1：本回合已被确认并写回（事实记录）
+            _p = bump_turns_in_beat(_base)
+            save_progress(_dr_turn, _p)
+            _adv = author_session.read_line(
+                "\n[大纲推进] 本回合已计入本节拍回合数。是否推进节拍？"
+                "（+ 仅计入回合/回车, b 进入本草下一节拍, c 进入下一章首拍, s 跳过手改 YAML）: "
+            ).strip().lower()
+            if _adv in ("b", "next"):
+                _ap = advance_to_next_beat(_snap_turn, _p)
+                # b=本草下一拍：仅接受同章内的推进；若已跳到下一章则视为本草无下一拍
+                if _ap is not None and _ap.get("chapter_id") == _p.get("chapter_id"):
+                    save_progress(_dr_turn, _ap)
+                    log.info("[大纲推进] 同章 %s→%s", _ap.get("beat_id"), _ap.get("beat_id"))
+                elif _ap is not None:
+                    log.info("[大纲] 本草无更多节拍，可用 c 进入下一章。")
+                else:
+                    log.info("[大纲] 已在末章末拍，无可推进节拍。")
+            elif _adv in ("c", "chapter"):
+                _ap = _p
+                for _ in range(64):  # 防御性上限
+                    _nxt = advance_to_next_beat(_snap_turn, _ap)
+                    if _nxt is None or _nxt.get("chapter_id") != _ap.get("chapter_id"):
+                        break
+                    _ap = _nxt
+                if _nxt is not None and _nxt.get("chapter_id") != _p.get("chapter_id"):
+                    save_progress(_dr_turn, _nxt)
+                    log.info("[大纲推进] 下一章 %s/%s → %s/%s", _p.get("chapter_id"), _p.get("beat_id"),
+                             _nxt.get("chapter_id"), _nxt.get("beat_id"))
+                else:
+                    log.info("[大纲] 已在末章，无可进入的下一章。")
+            elif _adv in ("s", "skip"):
+                log.info("[大纲] 作者选择跳过，改由手改 YAML。")
+            else:
+                log.info("[大纲] 仅计入本回合数（仍停留 %s/%s）。", _p.get("chapter_id"), _p.get("beat_id"))
         confirmed, result_phase2 = review_memory_plan(
             result_phase1, scope_id, time_str, place,
             edit_output_dir=edit_output_dir,

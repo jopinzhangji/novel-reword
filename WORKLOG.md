@@ -7,13 +7,21 @@
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点** + **W 系列 W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**（主线叙事者 prompt 注入主角名册，全量 257 通过）与**角色独立演进：设计文档对账与优化**（「多视角内部模拟 + 单一主角导出」显式化，doc 闸 ✅）、**阶段 1a/1b/2 编码 + 成长状态注入**（1a 信息视野 + 语义关系边 + 成长骨架；1b 五维迁移规则；2 GrowthGuard 强约束；角色/范围叙事者 prompt 注入成长状态 + **U-6 回合内二次反应链**，全量 300 通过）；**2026-08-27** **Linux 迁移收口**（开发环境文档 Linux 化、入口 EOF 健壮性、过时状态描述修正，全量 251 通过）；**2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
+| **近期已完成** | **2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**（主线叙事者 prompt 注入主角名册，全量 257 通过）与**角色独立演进：设计文档对账与优化**（「多视角内部模拟 + 单一主角导出」显式化，doc 闸 ✅）、**阶段 1a/1b/2 编码 + 成长状态注入**（1a 信息视野 + 语义关系边 + 成长骨架；1b 五维迁移规则；2 GrowthGuard 强约束；角色/范围叙事者 prompt 注入成长状态 + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（开发环境文档 Linux 化、入口 EOF 健壮性、过时状态描述修正，全量 251 通过）；**2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
 | **当前优先** | **工程主线**：**MVP-2**、任务 E；**角色成长状态机 MVP**（阶段 1a 差异化视野 + 语义关系 + 成长骨架、1b 五维迁移规则、**2 GrowthGuard 强约束**，见 [next-iteration](./docs/planning/next-iteration.md)）；**D9 工作台**：W1→W2→**W3 设定交互**→**W4 章节交互**；**CC-b**；**I6**。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
 
 ---
 
 ## 2026-08-30
+
+### 大纲 MVP-2：progress.yaml 写回 + 作者在环节拍推进
+
+- **背景**：大纲**读侧**（MVP-0 加载/日志、MVP-1 注入分析/正文、MVP-1b 设定→大纲生成）已收口，但停在「只读不写」——`turns_in_beat` 恒 0、「建议单节拍 <N 回合」软提示从不增长、节拍 `status` 无人置 done、进度不可重启续读。
+- **新增写回 API**（`src/runtime/outline_store.py`，确定性计算与 I/O 分离）：`bump_turns_in_beat`（+1）、`advance_to_next_beat`（同章下一拍→下一章首拍→末章末拍返 None）、`save_progress`（写盘补 `updated_at`）、`resolve_outline_context`（单次解析返回 snippet+beat）；`BeatContext` 增 `missing_ref`（引用失效显式置位）。
+- **接线**（`run_novel_with_author.py`）：每确认写回一个有效回合即 `turns_in_beat += 1` 写回；作者在环显式菜单推进节拍/章（`+`/`b`/`c`/`s`），**无静默跳章**；每回合改用 `resolve_outline_context` 单次解析（消除重复 `resolve_current_beat`/`outline_injection_options`）；大纲构建异常由静默 `log.debug` 改为**首损 WARN**。
+- **测试**：`tests/unit/test_outline_store.py` 追加 bump/advance/save+reload/missing_ref 等；全量回归通过。
+- **下一步**：大纲 Phase 2（全量回写 outline.yaml、拆 beats）、任务 E、D9 工作台 W1–W4、CC-b、I6。
 
 ### 三层记忆分层落库 + 写入校验 + 检索消费（角色独立演进）
 

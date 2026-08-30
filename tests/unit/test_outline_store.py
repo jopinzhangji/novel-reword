@@ -5,15 +5,20 @@ import yaml
 
 from src.runtime.outline_store import (
     BeatContext,
+    advance_to_next_beat,
     build_outline_prompt_snippet,
+    bump_turns_in_beat,
     extract_chapter_outline_from_setting,
     load_outline_snapshot,
     materialize_outline_from_setting_research,
+    normalize_progress,
     outline_dict_from_setting_chapter_outline,
     outline_injection_options,
     outline_yaml_path,
     progress_yaml_path,
     resolve_current_beat,
+    resolve_outline_context,
+    save_progress,
     validate_outline,
     validate_progress,
 )
@@ -182,3 +187,140 @@ def test_materialize_skips_when_outline_exists(tmp_path):
 def test_extract_chapter_outline_none_when_empty():
     assert extract_chapter_outline_from_setting({}) is None
     assert extract_chapter_outline_from_setting({"章节大纲": {"chapters": []}}) is None
+
+
+# --- MVP-2：progress.yaml 写回 + 节拍推进 ---
+
+def _outline_dict_two_chapters():
+    return {
+        "version": 1,
+        "chapters": [
+            {
+                "id": "c1",
+                "title": "第一章",
+                "beats": [
+                    {"id": "c1_b1", "intent": "氛围", "status": "active"},
+                    {"id": "c1_b2", "intent": "冲突", "status": "planned"},
+                ],
+            },
+            {
+                "id": "c2",
+                "title": "第二章",
+                "beats": [
+                    {"id": "c2_b1", "intent": "转折", "status": "planned"},
+                ],
+            },
+        ],
+    }
+
+
+def _snap(tmp_path, outline=None, progress=None):
+    root = tmp_path / "novel"
+    od = root / "book" / "outline"
+    od.mkdir(parents=True)
+    (od / "outline.yaml").write_text(yaml.safe_dump(outline or _outline_dict_two_chapters(), allow_unicode=True), encoding="utf-8")
+    if progress is not None:
+        (od / "progress.yaml").write_text(yaml.safe_dump(progress, allow_unicode=True), encoding="utf-8")
+    snap = load_outline_snapshot(root)
+    assert snap is not None
+    return snap
+
+
+def test_normalize_progress_defaults():
+    assert normalize_progress({})["version"] == 1
+    assert normalize_progress({"version": 3})["version"] == 3
+    assert normalize_progress(None)["version"] == 1
+
+
+def test_bump_turns_in_beat_increments_and_preserves():
+    out = bump_turns_in_beat({"chapter_id": "c1", "beat_id": "c1_b1", "turns_in_beat": 2})
+    assert out["turns_in_beat"] == 3
+    assert out["chapter_id"] == "c1" and out["beat_id"] == "c1_b1"
+    assert out["version"] == 1
+    # 非 turns 自定义键保留
+    out2 = bump_turns_in_beat({"chapter_id": "c9", "extra": "x"})
+    assert out2["turns_in_beat"] == 1
+    assert out2["extra"] == "x"
+
+
+def test_advance_to_next_beat_same_chapter(tmp_path):
+    snap = _snap(tmp_path, progress={"version": 1, "chapter_id": "c1", "beat_id": "c1_b1"})
+    nxt = advance_to_next_beat(snap, {"chapter_id": "c1", "beat_id": "c1_b1", "turns_in_beat": 0})
+    assert nxt is not None
+    assert nxt["chapter_id"] == "c1" and nxt["beat_id"] == "c1_b2"
+    assert nxt["turns_in_beat"] == 0
+
+
+def test_advance_to_next_beat_cross_chapter(tmp_path):
+    snap = _snap(tmp_path, progress={"version": 1, "chapter_id": "c1", "beat_id": "c1_b2"})
+    nxt = advance_to_next_beat(snap, {"chapter_id": "c1", "beat_id": "c1_b2"})
+    assert nxt is not None
+    assert nxt["chapter_id"] == "c2" and nxt["beat_id"] == "c2_b1"
+
+
+def test_advance_to_next_beat_last_returns_none(tmp_path):
+    snap = _snap(tmp_path, progress={"version": 1, "chapter_id": "c2", "beat_id": "c2_b1"})
+    assert advance_to_next_beat(snap, {"chapter_id": "c2", "beat_id": "c2_b1"}) is None
+
+
+def test_resolve_outline_context(tmp_path):
+    rc = {"runtime": {"outline": {"enabled": True}}, "agents": {"characters": {"enabled_ids": ["p"]}}}
+    snap = _snap(tmp_path, progress={"version": 1, "chapter_id": "c1", "beat_id": "c1_b1"})
+    snippet, beat = resolve_outline_context(rc, snap, {"characters": [{"id": "p", "name": "P", "is_protagonist": True}]},
+                                            protagonist_id="p", protagonist_display_name="P")
+    assert beat is not None and beat.beat_id == "c1_b1"
+    assert "全书大纲" in snippet and "氛围" in snippet and "主角" in snippet
+    # disabled → ("", None)
+    rc_off = {"runtime": {"outline": {"enabled": False}}}
+    s2, b2 = resolve_outline_context(rc_off, snap)
+    assert s2 == "" and b2 is None
+    # 无 snapshot → ("", None)
+    s3, b3 = resolve_outline_context(rc, None)
+    assert s3 == "" and b3 is None
+
+
+def test_save_progress_reload_roundtrip(tmp_path):
+    root = tmp_path / "novel"
+    od = root / "book" / "outline"
+    od.mkdir(parents=True)
+    (od / "outline.yaml").write_text(yaml.safe_dump(_outline_dict_two_chapters(), allow_unicode=True), encoding="utf-8")
+    pp = save_progress(root, {"chapter_id": "c1", "beat_id": "c1_b2", "turns_in_beat": 4})
+    assert pp.exists()
+    # 重启续读：MV-2 验收 §5.1 —— 读到上一轮写入的值 + updated_at
+    snap = load_outline_snapshot(root)
+    assert snap is not None and snap.progress is not None
+    assert snap.progress["chapter_id"] == "c1"
+    assert snap.progress["beat_id"] == "c1_b2"
+    assert snap.progress["turns_in_beat"] == 4
+    assert snap.progress.get("updated_at")  # I/O 层已补时间戳
+
+
+def test_resolve_missing_chapter_ref(tmp_path):
+    snap = _snap(tmp_path, progress={"version": 1, "chapter_id": "NO_SUCH", "beat_id": "x"})
+    bc = resolve_current_beat(snap)
+    assert bc is not None  # 仍回退不崩
+    assert bc.missing_ref == "chapter"
+    assert bc.chapter_id == "c1"
+
+
+def test_resolve_missing_beat_ref(tmp_path):
+    snap = _snap(tmp_path, progress={"version": 1, "chapter_id": "c1", "beat_id": "NO_SUCH"})
+    bc = resolve_current_beat(snap)
+    assert bc is not None
+    assert bc.missing_ref == "beat"
+
+
+def test_bump_then_resolve_reads_incremented(tmp_path):
+    """MVP-2 验收 §5.2：进度与作者推进一致（bump 后 resolve 读到 +1）。"""
+    root = tmp_path / "novel"
+    od = root / "book" / "outline"
+    od.mkdir(parents=True)
+    (od / "outline.yaml").write_text(yaml.safe_dump(_outline_dict_two_chapters(), allow_unicode=True), encoding="utf-8")
+    (od / "progress.yaml").write_text(
+        yaml.safe_dump({"version": 1, "chapter_id": "c1", "beat_id": "c1_b1", "turns_in_beat": 2}),
+        encoding="utf-8",
+    )
+    snap = load_outline_snapshot(root)
+    bumped = bump_turns_in_beat(snap.progress)
+    save_progress(root, bumped)
+    assert resolve_current_beat(load_outline_snapshot(root)).turns_in_beat == 3

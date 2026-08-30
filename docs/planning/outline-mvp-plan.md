@@ -97,14 +97,22 @@
 ### 5.1 CLI / 交互（建议）
 
 - **每回合开始**（或进入阶段一前）：**INFO** 再打一行紧凑进度，例如  
-  `[大纲进度] chapter=ch01 beat=ch01_b2 turns_in_beat=2/3`。  
-- **阶段一作者确认正文后**（或整回合结束前）：询问是否 **「本节拍已够 / 进入下一节拍」**（y/n）；或子菜单：**仅增加 `turns_in_beat` / 前进到下一 `beat_id` / 跳过（手改 YAML）**。  
-- **默认安全路径**：只更新 **`progress.yaml`**（`chapter_id`、`beat_id`、`turns_in_beat`、`last_updated`）；必要时更新当前节拍 `status: active → done` **若** 选择「前进」，则下一节拍 `planned → active` 的更新 **优先只写在 progress 里**（`beat_id` 指针迁移）；**全量回写 outline.yaml** 留作 **Phase 2** 或手工编辑。
+  `[大纲进度] chapter=ch01 beat=ch01_b2 turns_in_beat=2/3`。
+- **阶段一作者确认正文并写回后**（或整回合结束前）：询问是否 **「本节拍已够 / 进入下一节拍」**（y/n）；或子菜单：**仅增加 `turns_in_beat` / 前进到下一 `beat_id` / 下一章 / 跳过（手改 YAML）**。
+- **默认安全路径**：只更新 **`progress.yaml`**（`chapter_id`、`beat_id`、`turns_in_beat`、`last_updated`/`updated_at`）；必要时更新当前节拍 `status: active → done` **若** 选择「前进」，则下一节拍 `planned → active` 的更新 **优先只写在 progress 里**（`beat_id` 指针迁移）；**全量回写 outline.yaml** 留作 **Phase 2** 或手工编辑。
+- **推进以作者显式指令为唯一**：每确认写回一个有效回合即无条件 `turns_in_beat += 1`（记录事实）；跨节拍/跨章需作者在环明确选择菜单项，**无静默自动跳章**。
+- **菜单项**（最小）：`+` 仅推进回合数；`b` 进入本草下一节拍；`c` 进入下一章首拍；`s` 跳过（手改 YAML）；回车默认 `+`。
 
 ### 5.2 写回规则（建议）
 
-- **`progress.yaml`**：`version`、`chapter_id`、`beat_id`、`turns_in_beat`、可选 `updated_at`。  
+- **`progress.yaml`**：`version`、`chapter_id`、`beat_id`、`turns_in_beat`、可选 `updated_at`。
 - **与文件锁**：单进程 CLI 可无锁；若未来 Web 并发再引入锁。
+- **代码 API**（`src/runtime/outline_store.py`，确定性计算与 I/O 分离）：
+  - `bump_turns_in_beat(progress) -> dict`：`turns_in_beat + 1`，其余键保留（安全默认）。
+  - `advance_to_next_beat(snapshot, progress) -> dict | None`：同章下一拍 → 下一章首拍 → 到末章末拍返回 `None`（不越界）。
+  - `save_progress(data_root, progress) -> Path`：写盘并补 `updated_at`（UTC ISO）。
+  - `resolve_outline_context(...) -> (snippet, BeatContext|None)`：单次解析供注入与日志/写回复用。
+  - `BeatContext.missing_ref`：`progress` 引用到不存在章/拍时置位，调用方 WARN，不再静默回退。
 
 ### MVP-2 验收清单
 

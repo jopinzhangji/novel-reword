@@ -10,6 +10,7 @@ data_root 与 file_sync、relationship_graph 同源：runtime.storage.data_root�
 """
 from __future__ import annotations
 
+import datetime as _dt
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -180,6 +181,7 @@ class BeatContext:
     turns_in_beat: int
     soft_max_turns: int
     next_beat_hint: str
+    missing_ref: str = ""  # Opt-7：progress 引用到不存在的章/拍时置 "chapter"/"beat"；无缺失为 ""
 
 
 def outline_injection_options(runtime_config: dict[str, Any]) -> dict[str, Any]:
@@ -219,12 +221,15 @@ def resolve_current_beat(
         turns_in_beat = 0
 
     chapter: dict[str, Any] | None = None
+    missing_ref: str = ""  # Opt-7：progress 引用到不存在的章/拍时置位，调用方 WARN
     if cid_req:
         for ch in chapters:
             if isinstance(ch, dict) and ch.get("id") == cid_req:
                 chapter = ch
                 break
     if chapter is None:
+        if cid_req:
+            missing_ref = "chapter"  # 请求的 chapter_id 未命中 → 显式记载缺失
         chapter = chapters[0] if isinstance(chapters[0], dict) else None
     if not chapter:
         return None
@@ -242,6 +247,8 @@ def resolve_current_beat(
                 beat = b
                 beat_idx = i
                 break
+        if beat is None and not missing_ref:
+            missing_ref = "beat"  # 请求的 beat_id 未命中 → 显式记载缺失
     if beat is None:
         for i, b in enumerate(beats):
             st = str(b.get("status") or "planned").lower()
@@ -283,6 +290,7 @@ def resolve_current_beat(
         turns_in_beat=turns_in_beat,
         soft_max_turns=soft_max_turns,
         next_beat_hint=next_hint,
+        missing_ref=missing_ref,
     )
 
 
@@ -322,29 +330,51 @@ def format_outline_snippet_for_prompt(
     return "\n".join(lines)
 
 
+def resolve_outline_context(
+    runtime_config: dict[str, Any],
+    outline_snapshot: OutlineSnapshot | None,
+    characters_config: dict[str, Any] | None = None,
+    *,
+    protagonist_id: str | None = None,
+    protagonist_display_name: str | None = None,
+) -> tuple[str, BeatContext | None]:
+    """
+    **单次解析**（Opt 3/4）：合并 runtime.outline 开关、resolve_current_beat、主角解析，
+    一次得到注入 prompt 的整段文本与 BeatContext，供 prompt 注入 + 日志 + 写回复用。
+    protagonist_id/display 可由调用方传入（避免重复解析主角）；缺省时内部 resolve。
+    关闭或快照为空时返回 ("", None)。
+    """
+    opts = outline_injection_options(runtime_config)
+    if not opts["enabled"] or outline_snapshot is None:
+        return ("", None)
+    beat = resolve_current_beat(
+        outline_snapshot,
+        soft_max_turns=int(opts["soft_max_turns"]),
+    )
+    if protagonist_id is None or protagonist_display_name is None:
+        from src.runtime.protagonist import resolve_protagonist_id
+
+        pid, pname = resolve_protagonist_id(runtime_config, characters_config)
+        protagonist_id = protagonist_id if protagonist_id is not None else pid
+        protagonist_display_name = protagonist_display_name if protagonist_display_name is not None else pname
+    snippet = format_outline_snippet_for_prompt(
+        beat,
+        protagonist_id=protagonist_id,
+        protagonist_display_name=protagonist_display_name,
+    )
+    return (snippet, beat)
+
+
 def build_outline_prompt_snippet(
     runtime_config: dict[str, Any],
     outline_snapshot: OutlineSnapshot | None,
     characters_config: dict[str, Any] | None = None,
 ) -> str:
     """
-    合并 runtime.outline 开关、resolve_current_beat、主角解析，得到可追加到 prompt 的整段文本。
+    兼容入口：委托 resolve_outline_context 取 snippet（保留原签名，外部调用不变）。
     """
-    opts = outline_injection_options(runtime_config)
-    if not opts["enabled"] or outline_snapshot is None:
-        return ""
-    beat = resolve_current_beat(
-        outline_snapshot,
-        soft_max_turns=int(opts["soft_max_turns"]),
-    )
-    from src.runtime.protagonist import resolve_protagonist_id
-
-    pid, pname = resolve_protagonist_id(runtime_config, characters_config)
-    return format_outline_snippet_for_prompt(
-        beat,
-        protagonist_id=pid,
-        protagonist_display_name=pname,
-    )
+    snippet, _ = resolve_outline_context(runtime_config, outline_snapshot, characters_config)
+    return snippet
 
 
 # --- MVP-1b：从设定「章节大纲」单向生成首版 outline.yaml（见 docs/planning/outline-mvp-plan.md §2、§4.5）---
@@ -442,12 +472,97 @@ def materialize_outline_from_setting_research(
         if beats0 and isinstance(beats0[0], dict):
             bid = str(beats0[0].get("id") or "")
         if cid and bid:
-            pp = progress_yaml_path(root)
-            if overwrite or not pp.is_file():
+            if overwrite or not progress_yaml_path(root).is_file():
                 prog = {"version": 1, "chapter_id": cid, "beat_id": bid, "turns_in_beat": 0}
-                pp.write_text(
-                    yaml.dump(prog, allow_unicode=True, default_flow_style=False, sort_keys=False),
-                    encoding="utf-8",
-                )
+                pp = save_progress(root, prog)
                 msg += f"；已写入 {pp}"
     return (True, msg)
+
+
+# --- MVP-2：progress.yaml 写回 + 节拍推进（见 docs/planning/outline-mvp-plan.md §5）---
+# updated_at 时间戳仅由 I/O 层 save_progress 填充；纯计算函数（bump/advance）不带时间，保持确定性易测。
+
+
+def normalize_progress(progress: dict[str, Any]) -> dict[str, Any]:
+    """补默认键：version 缺省 1；返回新 dict，不做原地改动。"""
+    out = dict(progress or {})
+    if not out.get("version"):
+        out["version"] = 1
+    return out
+
+
+def bump_turns_in_beat(progress: dict[str, Any]) -> dict[str, Any]:
+    """安全默认：返回 turns_in_beat+1 的新 progress，其余键保留。每确认写回一个有效回合调用。"""
+    out = normalize_progress(progress)
+    try:
+        tib = int(out.get("turns_in_beat", 0) or 0)
+    except (TypeError, ValueError):
+        tib = 0
+    out["turns_in_beat"] = tib + 1
+    return out
+
+
+def advance_to_next_beat(
+    snapshot: OutlineSnapshot,
+    progress: dict[str, Any],
+) -> dict[str, Any] | None:
+    """
+    作者显式推进：同章下一拍 → 下一章首拍（planned/active，缺省首拍）→ 到末章末拍返 None（不越界）。
+    返回新 progress（turns_in_beat 重置 0）；无下一拍返回 None。
+    """
+    chapters = snapshot._flat_chapters()
+    if not chapters:
+        return None
+    beat = resolve_current_beat(snapshot)
+    if beat is None:
+        return None
+
+    cur_cid = beat.chapter_id
+    cur_bid = beat.beat_id
+    # 当前章在扁平列表中的索引
+    cur_ch_idx = -1
+    for i, ch in enumerate(chapters):
+        if isinstance(ch, dict) and ch.get("id") == cur_cid:
+            cur_ch_idx = i
+            break
+    if cur_ch_idx < 0:
+        return None
+
+    cur_ch = chapters[cur_ch_idx]
+    beats = [b for b in (cur_ch.get("beats") or []) if isinstance(b, dict)]
+    # 同章内下一拍
+    for i, b in enumerate(beats):
+        if b.get("id") == cur_bid and i + 1 < len(beats):
+            nxt = beats[i + 1]
+            return {
+                "version": 1,
+                "chapter_id": cur_cid,
+                "beat_id": str(nxt.get("id") or ""),
+                "turns_in_beat": 0,
+            }
+    # 无同章下一拍 → 下一章首拍
+    for ch in chapters[cur_ch_idx + 1:]:
+        for b in (ch.get("beats") or []):
+            if isinstance(b, dict):
+                return {
+                    "version": 1,
+                    "chapter_id": str(ch.get("id") or ""),
+                    "beat_id": str(b.get("id") or ""),
+                    "turns_in_beat": 0,
+                }
+    return None
+
+
+def save_progress(data_root: Path, progress: dict[str, Any]) -> Path:
+    """写 progress.yaml：补 updated_at（UTC ISO）并落盘。统一写点，未来加锁有收敛面。"""
+    root = Path(data_root)
+    pp = progress_yaml_path(root)
+    pp.parent.mkdir(parents=True, exist_ok=True)
+    body = normalize_progress(progress)
+    body["updated_at"] = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
+    pp.write_text(
+        yaml.dump(body, allow_unicode=True, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
+    logger.info("[大纲] 已写回进度: %s", pp)
+    return pp

@@ -83,7 +83,7 @@
    明确 prompt 约束：**以主角为主线**；非主角仅在摘要或在场时展开；可注入桥接摘要块（若本回合标记需要）。
 
 3. **`run_novel_with_author.py`**  
-   每回合开始打印章/节拍进度；作者确认写回后更新 `progress` 或节拍 `status`（`planned` / `active` / `done`），**推进以作者为主**。
+   每回合开始打印章/节拍进度；作者确认写回后**推进以作者显式指令为唯一**——每确认一个有效回合即 `turns_in_beat += 1`（事实记录），跨节拍/章由作者在环明确选择（`outline_store.advance_to_next_beat` + `save_progress`）。**只写 `progress.yaml` 指针迁移，不整树写 outline.yaml**（全量回写留 Phase 2）。
 
 4. **`Orchestrator` / `MemoryStorage`**  
    主书事件仍入 `scope` 事件簿；屏外副线写入对应角色 `append_event_refinement`（或专用 API），与正文数据源分离、可追溯。
@@ -136,5 +136,6 @@
 
 ## 10. 修订记录
 
+- **2026-08-30**：§5 接入点 3 明确 MVP-2 —— 作者显式推进、写回 `progress.yaml` 指针迁移（`advance_to_next_beat`/`save_progress`）不整树写 outline。
 - **2026-03-29**：§8 增加 **[outline-mvp-plan.md](../planning/outline-mvp-plan.md)** 互链（MVP-0/1/2 细化方案与 SSOT）。
 - **2026-03-28**：初稿；合并节拍多回合（建议 &lt;3）、大纲指导非限死、正文主角轴 + 多角色平行记忆 + 桥接摘要 + 同文导出，并与成长状态机、关系图谱文档互链。
