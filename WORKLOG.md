@@ -2,14 +2,33 @@
 
 每日追加更新，记录当日完成工作、优劣分析及下一步计划。
 
-### 速览：当前状态与下一步（2026-08-30）
+### 速览：当前状态与下一步（2026-08-31）
 
 | 项 | 说明 |
 |----|------|
-| **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点** + **W 系列 W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**（主线叙事者 prompt 注入主角名册，全量 257 通过）与**角色独立演进：设计文档对账与优化**（「多视角内部模拟 + 单一主角导出」显式化，doc 闸 ✅）、**阶段 1a/1b/2 编码 + 成长状态注入**（1a 信息视野 + 语义关系边 + 成长骨架；1b 五维迁移规则；2 GrowthGuard 强约束；角色/范围叙事者 prompt 注入成长状态 + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（开发环境文档 Linux 化、入口 EOF 健壮性、过时状态描述修正，全量 251 通过）；**2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
-| **当前优先** | **工程主线**：**MVP-2**、任务 E；**角色成长状态机 MVP**（阶段 1a 差异化视野 + 语义关系 + 成长骨架、1b 五维迁移规则、**2 GrowthGuard 强约束**，见 [next-iteration](./docs/planning/next-iteration.md)）；**D9 工作台**：W1→W2→**W3 设定交互**→**W4 章节交互**；**CC-b**；**I6**。 |
+| **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点：G1–G3 方向主轴 + W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
+| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
+| **当前优先** | **方向**：**多视角独立演进 ⊕ 单一主角导出** + **用户可调**（增强默认关、可开可关）。**G 系列**：**G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3，最对齐空白）→ **G2 演进层 ↔ 策略层耦闸**（成长/关系/视野进 PacingContract/Critic，节拍 tags 实影响成长）→ **G3 用户可调收敛 + 运行时主角切换**（D9 `/system` 可写出口）。**续工程**：**D9 W1→W4**、**CC-b**、**I6**、任务 E、同文导出。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
+
+---
+
+## 2026-08-31
+
+### 全仓结构梳理 +「多视角独立演进 ⊕ 用户可调」方向对账（分析 / 文档）
+
+- **背景**：成长状态机（1a/1b/2）、三层记忆、信息视野、U-6 反应链、大纲 MVP-2 相继落地后，用三个并行子系统映射 + 逐模块阅读对全仓做一次结构化梳理，把每项能力对齐既定大方向——**多视角内部独立演进 ⊕ 单一主角导出**，并确认**用户可调**是被一致遵守的默认（增强一律默认关、`config` 可开可关；导出镜头由用户选择）。
+- **三层子系统映射（落地文件）**：
+  1. **核心编排 + LLM + 数据**：`src/orchestrator`（并行回合、双阶段写回、冲突裁决）、`src/runtime/{storage,file_sync,relationship_graph}`、`src/context`、`src/llm`（重试/超时/配额）、`src/config`（小说级合并加载）。
+  2. **独立演进 + Harness**：`src/runtime/{character_growth,memory_layers,outline_store,protagonist}`、`src/retrieval/info_view`、`src/author_harness`（I1–I5 策略链 + Facing/Critic）。
+  3. **作者在环体验**：`run_novel_with_author`、`src/author_loop`、`src/agents/setting_research`、`src/agents/dev`（设定讨论、回合 plan→审阅→写回、大纲推进、DevAgent）。
+- **逐功能点对账结论**：多数能力已按「多视角独立演进」到位——每个关键角色独立记忆/信息视野/五维成长/关系边，写回仅在**在场**角色上累积；「用户可调」靠 `react_chain`/`memory_layers`/`outline.enabled` 等开关保持默认不破、全量 329 通过。
+- **识别出的三大优化主轴（新 G 系列，见 next-iteration）**：
+  - **G1 屏外线 / 并列主线（最对齐空白）**：角色只在**在场**事件上成长（`apply_growth_transition_for_turn` 仅遍历 `present_character_ids`）；未入场的独立生活（`off_screen`/`parallel_thread` 记忆、屏外时间线、桥接摘要）尚无真实载体——对应大纲 **Phase 3**。
+  - **G2 演进层 ↔ 策略层耦闸**：演进（成长/关系/视野）在编排器写回内，策略/节奏（PacingContract/Critic/Harness）在 `turn_planning` 内——共享 `runtime_config` 但不互调；成长应先喂给节奏/审阅，节拍 `tags` 才真正影响成长。
+  - **G3 用户可调收敛**：能力开关散在 `runtime_config` 深层 `.get(..., False)`，缺统一「能力开关」外观面；D9 `/system`（W3 可写、W4 正篇）与**运行时主角切换**（现仅配置期 `protagonist_id`）是落点。
+- **文档落地**：`docs/planning/next-iteration.md` 新增 G 系列当前焦点与下一步优先；`WORKLOG` 速览与本节同步。
+- **下一步**：续 **D9 W1–W4**、**CC-b**、**I6**、任务 E，并适时立项 **G1**（屏外演进 + 桥接摘要）。
 
 ---
 

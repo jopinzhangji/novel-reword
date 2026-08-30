@@ -4,14 +4,16 @@
 
 ### 当前焦点（与 [WORKLOG.md](../../WORKLOG.md) 速览同步）
 
-1. **MVP-1b**：设定 **章节大纲** → 首版 `book/outline/outline.yaml`（**API**：`outline_store.materialize_outline_from_setting_research`；主流程内一键入口可后续再接）。  
-2. **MVP-2（大纲）**：按 [outline-mvp-plan.md](./outline-mvp-plan.md) §5 推进 **`progress.yaml` 写回**与**作者在环节拍推进**（`outline_store` 增 `bump_turns_in_beat`/`advance_to_next_beat`/`save_progress`/`resolve_outline_context`；`run_novel_with_author` 每确认写回 +1、作者显式菜单推进、无静默跳章；单次解析复用、首损 WARN、`BeatContext.missing_ref` 显式降级；`[大纲进度]` 已有日志基础）。**编码进行中**（doc-first ✅）。  
-3. **角色成长状态机 MVP**：两层模型 **多视角内部模拟 ⊕ 单一主角导出**（§1.2a）——内部所有关键角色（含主角）各持独立经历/记忆/知情视野/成长、多视角对等演进（真实世界式）；导出时用户从关键角色中选一为叙事主角、主书以其为镜头重导出（`protagonist.py` 单主角导出保留）。设计文档已对账优化（doc 闸 ✅，见 [character-growth-state-machine.md](../design/character-growth-state-machine.md)）。按下文 §9 推进顺序：**阶段 1a**（§4.6 信息视野 + §4.5 语义关系边 + §2 成长状态骨架；`src/retrieval/info_view.py`、`src/runtime/character_growth.py`、`relationship_graph.upsert_semantic_edge`）**✅ 已完成编码** → **阶段 1b**（五维 `CharacterGrowthState` 迁移规则 + `apply_growth_transition`/`apply_growth_transition_for_turn`，接入 `storage.emotions[]`）**✅ 已完成编码** → **阶段 2**（`GrowthGuard` 强约束：无代价收益禁止/目标冷却/关系连续性/单回合越界钳制 + 告警审计）**✅ 已完成编码**。**前置＝本次文档闸（✅）；阶段 1a/1b/2 全部落地**；成长状态已注入角色 + 范围叙事者 prompt（`format_growth_snippet`/`format_present_growth_snippet` 消费）；**U-6 回合内二次反应链**（`react_chain` 开关、先发批→定向二次批→合并、只回公开言行不泄私有内心）**✅ 已落地**；**三层记忆分层落库 ✅**（§4.3：L1 事实 append-only / L2 解释 upsert / L3 策略 ttl 过期，`agents.characters.memory_layers` 默认关，确定性无 LLM，检索可开关注入自身 L2/L3，无跨角色泄露）。  
-4. **并行**：任务 E（初稿→终态书名 E2E）、小说级路径收口、`run_novel_with_author` LLM 连续超时降级。  
-5. **工程主线（作者在环）**：**Harness R7 子步** **R7e/R8** ✅（阶段二 **`MEMORY_PLAN_REVIEW`** 可观测日志；阶段一 Harness 统一 **`MAIN_WRITING_REVIEW`** 日志 + `test_author_harness_design_main` 检索链断言）；后续以 **大纲 MVP-1b/2**、任务 E 等为主；产品级概念见 **§「产品级路线」**。  
-6. **上下文压缩（文档 ✅；编码待 CC-b～）**：[design/context-compression-adaptive-layered.md](../design/context-compression-adaptive-layered.md)（**D8**）— 自适应分层任务锚定、Compression Contract；与 **U-1** 检索治理互链；落地阶段见该文 §8 与下方 **待办**。
-7. **智能体基础方案增强（新）**：补齐 Harness **I0–I6**（动态规则加载、自我迭代 Critic/PolicyUpdater、受控联网 Tool/Playwright 路线）；**I5 最小实现 ✅**；下一步 **I6** 或 **CC-b**，不与大纲主线硬冲突。
-8. **小说作者在环工作台（D9）**：[design/novel-reader-ui.md](../design/novel-reader-ui.md) — **阅览 + 与 CLI 等价的作者在环交互**（设定 `c`/讨论、每章回合审阅）；`WebInputAdapter` ↔ `read_line`；**系统设置** `/system`（LLM/工作台/联网）；**W0 ✅**；编码 **W1 阅览 → W2 壳+系统设置只读 → W3 设定交互+配置可写 → W4 正篇交互**。
+**方向**：**多视角内部独立演进 ⊕ 单一主角导出** + **用户可调**（一切增强默认关、`config` 可开可关；导出镜头由用户从关键角色中选一）。下列 **G1–G3** 为全仓梳理（2026-08-31）后的方向对齐主轴；已收敛的旧主线（大纲 MVP-2、成长 MVP、三层记忆、U-6、主角名注入）均 ✅，见下「承接主线」。
+
+1. **G1 屏外线 / 并列主线（大纲 Phase 3，最对齐空白）**：当前每角色只在**在场**事件上成长（`apply_growth_transition_for_turn` 仅遍历 `present_character_ids`，orchestrator 写回侧）；**未入场角色的独立生活尚无真实载体**。立项「**off-screen 演进**」：每角色可累积 `off_screen` / `parallel_thread` 记忆、可选屏外时间线、以及主书下一场景依赖其屏外结果时的**桥接摘要**注入（一两段结构化片段，不灌副线全文）。验收：**主书仍主角轴**；副线不因缺席而停滞；桥接摘要来源可追溯。见 [outline-and-beats.md §2.2/§2.3](../design/outline-and-beats.md)。
+2. **G2 演进层 ↔ 叙事策略层耦闸**：演进（成长/关系/信息视野）跑在编排器**写回**内（`apply_event_and_state_write`/`apply_memory_write`），策略/节奏（PacingContract/Critic/Harness）跑在 `turn_planning` 内——共享 `runtime_config` 但**互不调用**。让**成长状态喂给节奏与审阅**（在场角色演进影响 `pace_mode`/Critic 输入），并让**节拍 `tags` 真正影响成长**（现仅作弱提示）。验收：两层在同一回合互相可影响且全程可观测。
+3. **G3 用户可调收敛 + 运行时主角切换**：能力开关现散落于 `runtime_config` 深层 `.get(..., False)`，缺统一「能力开关」外观面；把 D9 工作台 `/system`（**W3 可写**、**W4 正篇**）作为作者侧可调出口，并把「单一主角导出」从**仅配置期**（`protagonist_id`/`is_protagonist`，`protagonist.py` 保留）扩展到**运行时可切换**（按章/弧重选镜头）。验收：作者不改配置文件即可开关能力/换主角。
+4. **承接主线（全部 ✅，续接为主）**：大纲 **MVP-2**（progress 写回 + 作者在环节拍推进）、**成长状态机 MVP**（1a 信息视野 + 语义边 + 骨架、**1b** 五维迁移、**2 GrowthGuard**）、**三层记忆分层**（L1/L2/L3，`memory_layers` 默认关）、**U-6 回合内二次反应链**（`react_chain` 默认关）、**主角姓名一致性注入**（`format_main_characters_snippet`）——全量 **329 通过 + 1 跳过（live）**。
+5. **并行**：任务 E（初稿→终态书名 E2E）、小说级路径收口、`run_novel_with_author` LLM 连续超时降级。
+6. **上下文压缩（D8）**：文档 ✅；编码 **CC-b～** 见待办。
+7. **智能体基础方案 I 系列**：I1–I5 ✅；下一步 **I6**（A/B 与回滚）。
+8. **小说作者在环工作台（D9）**：**W0 ✅**；编码 **W1 阅览 → W2 壳+系统设置只读 → W3 设定交互+`/system` 可写 → W4 正篇交互**。
 
 ---
 
@@ -144,7 +146,9 @@
 
 ## 下一步优先（执行版；2026-03-29 与文首「当前焦点」「产品级路线」同步）
 
-**排期 SSOT**：本条与文首 **当前焦点（1–6）**、**产品级路线（P0–P5）** 一致；变更时优先改文首表与本节编号列表，并同步 [`WORKLOG.md`](../../WORKLOG.md) 速览。
+**排期 SSOT**：本条与文首 **当前焦点（G1–G3 + W0–W5）**、**产品级路线（P0–P5）** 一致；变更时优先改文首表与本节编号列表，并同步 [`WORKLOG.md`](../../WORKLOG.md) 速览。
+
+**G 系列（2026-08-31 方向对账新增；详见文首「当前焦点」）**：**G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3）→ **G2 演进层 ↔ 策略层耦闸**（成长/关系/视野 进 Pacing/Critic，节拍 `tags` 实影响成长）→ **G3 用户可调收敛 + 运行时主角切换**（统一「能力开关」 + D9 `/system` 出口）。立项前按 doc-first 单开文档闸。
 
 **大纲三阶段**：见 **[outline-mvp-plan.md](./outline-mvp-plan.md)**（MVP-0 验收口径；MVP-1/1b/2 范围、API 建议、验收清单、SSOT）。
 
