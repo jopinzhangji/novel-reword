@@ -21,6 +21,8 @@ class MemoryStorage:
         # 三层记忆（§4）：L2 解释（可更新）、L3 策略（可过期）。L1 事实存 _char_events。
         self._char_interpretations: dict[str, list] = {}
         self._char_strategies: dict[str, list] = {}
+        # G1 屏外线 / 并列主线（§2.2 平行主线）：同书不同视角的独立活动记忆，与主书 scope 事件分离。
+        self._char_threads: dict[str, list] = {}
 
     # --- 角色：profile ---
     def get_profile(self, character_id: str) -> dict:
@@ -80,6 +82,30 @@ class MemoryStorage:
         entry = dict(entry)
         self._char_strategies.setdefault(character_id, []).append(entry)
         return entry
+
+    # --- G1 屏外线 / 并列主线（§2.2 平行主线，outline-and-beats）---
+    def append_off_screen_refinement(self, character_id: str, entry: dict) -> dict:
+        """
+        追加一条屏外/并列主线记忆。entry 建议含 `thread`（`off_screen`/`parallel_thread`）、`summary`、
+        可选 `turn_index`/`scope_snapshot`/`tags`/`updated_at`。与主书 `_char_events`（在场事实卡）分离。
+        """
+        entry = dict(entry)
+        self._char_threads.setdefault(character_id, []).append(entry)
+        return entry
+
+    def get_recent_off_screen(
+        self,
+        character_id: str,
+        thread: str | None = None,
+        limit: int = 20,
+    ) -> list:
+        """
+        取该角色最近屏外记忆。`thread` 非空时仅返回 `entry.thread == thread` 的条目；limit 截断最近 N 条。
+        """
+        raw = list(self._char_threads.get(character_id, []))
+        if thread:
+            raw = [e for e in raw if e.get("thread") == thread]
+        return raw[-limit:] if limit else raw
 
     def get_active_strategies(self, character_id: str, current_turn: int | None = None, limit: int = 8) -> list:
         """L3 策略层：可过期——current_turn 给出时过滤已过期（expires_turn<=current_turn）条目；未给或过期逻辑缺省则全返。"""

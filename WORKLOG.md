@@ -7,7 +7,7 @@
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点：G1–G3 方向主轴 + W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
+| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测，全量 **338 通过 + 1 跳过**）；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
 | **当前优先** | **方向**：**多视角独立演进 ⊕ 单一主角导出** + **用户可调**（增强默认关、可开可关）。**G 系列**：**G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3，最对齐空白）→ **G2 演进层 ↔ 策略层耦闸**（成长/关系/视野进 PacingContract/Critic，节拍 tags 实影响成长）→ **G3 用户可调收敛 + 运行时主角切换**（D9 `/system` 可写出口）。**续工程**：**D9 W1→W4**、**CC-b**、**I6**、任务 E、同文导出。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
 
@@ -28,7 +28,32 @@
   - **G2 演进层 ↔ 策略层耦闸**：演进（成长/关系/视野）在编排器写回内，策略/节奏（PacingContract/Critic/Harness）在 `turn_planning` 内——共享 `runtime_config` 但不互调；成长应先喂给节奏/审阅，节拍 `tags` 才真正影响成长。
   - **G3 用户可调收敛**：能力开关散在 `runtime_config` 深层 `.get(..., False)`，缺统一「能力开关」外观面；D9 `/system`（W3 可写、W4 正篇）与**运行时主角切换**（现仅配置期 `protagonist_id`）是落点。
 - **文档落地**：`docs/planning/next-iteration.md` 新增 G 系列当前焦点与下一步优先；`WORKLOG` 速览与本节同步。
-- **下一步**：续 **D9 W1–W4**、**CC-b**、**I6**、任务 E，并适时立项 **G1**（屏外演进 + 桥接摘要）。
+- **下一步**：续 **D9 W1–W4**、**CC-b**、**I6**、任务 E；并正式立项 **G1**（屏外演进 + 桥接摘要）。
+
+---
+
+## 2026-08-31（续）
+
+### G1 文档闸（屏外线 / 并列主线，SDD）
+
+- **立项背景**：上一节对账识别出"角色只在在场事件上成长"是「多视角独立演进」最大空白；本节将 [outline-and-beats.md](./docs/design/outline-and-beats.md) **Phase 3** 蓝图落成可执行 **SDD**。
+- **新增** [`docs/design/parallel-thread-bridging.md`](./docs/design/parallel-thread-bridging.md)：屏外数据模型（`threads/<id>/off_screen.yaml` + `$thread` 标签，复用 memory_layers 分层）、**触发模型裁决**（§9.2 开放项：默认**按需/按标签**、批处理可选 G1c、不做逐回合全量刷新）、桥接摘要注入（`TurnContext.bridging_snippet` + `build_turn_body_prompt` 块，`bridge_budget_chars` 预算）、屏外成长复用 `GrowthGuard`、`parallel_threads.enabled` 默认关。
+- **登记**：`SPEC_SDD` **D10**；`next-iteration` 当前焦点 G1 项挂 SDD 链接与 G1a/G1b/G1c 分阶段。
+- **下一步编码**：从 **G1a**（`storage.file_sync.memory_layers` 增 `threads`/`off_screen` + `append_off_screen_refinement` + `apply_off_screen_transition_for_turn`）起步。**（文档闸待作者评审后再动代码）**
+
+---
+
+## 2026-08-31（再续）
+
+### G1a 编码：屏外线数据落盘 + 屏外演进
+
+- **范围**：SDD D10 §8 **G1a**——屏外线数据的进程内存桶、磁盘持久化与成长回放入口；本轮不接入主循环（接桥接注入留 **G1b**）。全程无 LLM、默认不改变既有行为。
+- **`src/runtime/storage.py`**：新增 `_char_threads` 桶 + `append_off_screen_refinement` / `get_recent_off_screen(thread, limit)`（筛 `thread`），与主书 `_char_events`（在场事实卡）分离。
+- **`src/runtime/memory_layers.py`**：`build_layer_entry` 增 `thread` 字段（非空才写，向后兼容）；新增 `THREAD_OFF_SCREEN`/`THREAD_PARALLEL` 常量。
+- **`src/runtime/file_sync.py`**：`off_screen_threads_yaml_path`（`book/characters/<id>/threads/off_screen.yaml`）+ `load_off_screen_threads`（缺省返回 []）+ `append_off_screen_thread`（读旧→追加→写回）；`import yaml`。
+- **`src/runtime/character_growth.py`**：新增 `apply_off_screen_transitions(storage, data_root, *, character_id, entries, guard)`——把一批屏外条目**批量回放**进该角色成长状态（复用 `apply_growth_transition_guarded` + `GrowthGuard`），落盘 `growth_state.yaml`、mind 变化写 emotions；**不经过主书 scope 事件簿**；返回 `(fired, guard_audit)`。跨条目平衡得以体现（先损耗后可收益放行、无代价收益被拒）。
+- **测试**：新增 `tests/unit/test_off_screen_threads.py` 9 条——thread 字段向后兼容、storage 桶隔离、YAML round-trip、非在场角色屏外演进、growth_state 落盘+回读、GrowthGuard 无代价收益被拒 / 先损耗后收益放行、无命中不变。全量回归 **338 通过 + 1 跳过（live）**（基线 329 + 9）。
+- **下一步**：**G1b**（`TurnContext.bridging_snippet` + `build_turn_body_prompt` 桥接块 + 触发/桥接菜单），再 **G1c**（可选批处理）。
 
 ---
 

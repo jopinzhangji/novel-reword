@@ -21,6 +21,10 @@ _L2_KEYWORDS = (
     "信任", "敌意", "好感", "猜想", "回味", "认定", "预感", "不悦",
 )
 
+# G1 屏外线记忆类型（与 layer 正交；outline-and-beats §2.2 平行主线）：
+THREAD_OFF_SCREEN = "off_screen"        # 未入场时的屏外独立活动
+THREAD_PARALLEL = "parallel_thread"     # 同世界观下另一条并列主线（可导出番外）
+
 
 def classify_memory_layer(summary: str) -> str:
     """
@@ -65,8 +69,10 @@ def build_layer_entry(
     time: str = "",
     place: str = "",
     ttl: int = 5,
+    thread: str = "",
 ) -> dict[str, Any]:
-    """构造 L2/L3 记忆条目（带 §4.2 统一标签）。L2→subject；L3→plan+expires_turn。"""
+    """构造 L2/L3 记忆条目（带 §4.2 统一标签）。L2→subject；L3→plan+expires_turn。
+    `thread`（G1）为去 `off_screen`/`parallel_thread`，非空时写入条目，标识屏外/并列主线记忆。"""
     summary = (summary or "").strip()
     base: dict[str, Any] = {
         "layer": layer,
@@ -76,6 +82,8 @@ def build_layer_entry(
         "place": place,
         "impact_level": "med",
     }
+    if thread:
+        base["thread"] = thread
     if layer == "L2":
         base["subject"] = interpretation_subject(summary)
         base["statement"] = (summary or "")[:200]

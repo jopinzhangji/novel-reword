@@ -6,6 +6,8 @@
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 # book 下二级目录名（内容、设定、人物、事件）
 BOOK_CONTENT = "content"
 BOOK_SETTING = "setting"
@@ -150,6 +152,48 @@ def sync_character_turn(
     summary = refinement_entry.get("summary", str(refinement_entry))
     (events_dir / name).write_text(f"# 回合 {turn_index}\n\n{summary}\n", encoding="utf-8")
     _append_events_readme(events_dir, name)
+
+
+_OFF_SCREEN_YAML_VERSION = 1
+
+
+def off_screen_threads_yaml_path(novel_root: Path, character_id: str) -> Path:
+    """G1 屏外线 YAML 路径：`<novel_root>/book/characters/<id>/threads/off_screen.yaml`（与 growth_state 同目录族）。"""
+    cid = _safe_dir_name(character_id)
+    return Path(novel_root) / "book" / BOOK_CHARACTERS / cid / "threads" / "off_screen.yaml"
+
+
+def load_off_screen_threads(novel_root: Path, character_id: str) -> list[dict]:
+    """
+    读取该角色屏外线条目列表。文件不存在或不可解析时返回空列表。
+    YAML 顶层结构：`{version, entries: [...]}`，与 growth/outline 风格一致。
+    """
+    path = off_screen_threads_yaml_path(novel_root, character_id)
+    if not path.is_file():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return []
+    entries = data.get("entries") if isinstance(data, dict) else None
+    return list(entries) if isinstance(entries, list) else []
+
+
+def append_off_screen_thread(novel_root: Path, character_id: str, entry: dict) -> Path:
+    """
+    追加一条屏外线记忆到该角色 threads YAML（读旧→追加→写回）。返回写入的路径。
+    本轮 writers：屏外线书写与主书事件簿分离、可追溯。
+    """
+    entry = dict(entry)
+    entries = load_off_screen_threads(novel_root, character_id)
+    entries.append(entry)
+    path = off_screen_threads_yaml_path(novel_root, character_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.safe_dump({"version": _OFF_SCREEN_YAML_VERSION, "entries": entries}, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    return path
 
 
 def _dict_to_yaml_like(d: dict) -> str:

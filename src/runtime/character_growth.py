@@ -547,3 +547,59 @@ def apply_growth_transition_for_turn(
                     },
                 )
     return results, guard_audit
+
+
+def apply_off_screen_transitions(
+    storage: Any,
+    data_root: Path,
+    *,
+    character_id: str,
+    entries: list[dict[str, Any]],
+    guard: GrowthGuard | None = None,
+    default_scope: str = "off_screen",
+) -> tuple[list[str], list[dict[str, Any]]]:
+    """
+    G1 屏外线演进：对单个**未必在场**关键角色，把一批屏外/并列主线条目批量回放进其成长状态
+    （复用 `apply_growth_transition_guarded` 与 `GrowthGuard`），并落盘 `growth_state.yaml`、把 mind 变化写入
+    该角色 emotions 槽位。这不经过主书 scope 事件簿——屏外演进与主书数据源分离、可追溯（outline-and-beats §2.2）。
+    返回 (fired_rule_names, guard_audit)；guard=None 时与无约束迁移等价。
+    """
+    data_root = Path(data_root)
+    if not character_id or not entries:
+        return [], []
+    state = load_growth_state(character_id, data_root)
+    fired_total: list[str] = []
+    guard_audit: list[dict[str, Any]] = []
+    anchor_turn = next((e.get("turn_index") for e in entries if isinstance(e.get("turn_index"), int)), None)
+    for entry in entries:
+        summary = str(entry.get("summary") or entry.get("plan") or "")
+        bundle = {
+            "summary": summary,
+            "scope_id": str(entry.get("scope_id") or default_scope),
+            "turn_index": entry.get("turn_index"),
+            "character_id": character_id,
+        }
+        state, fired, decisions = apply_growth_transition_guarded(state, bundle, guard)
+        fired_total.extend(fired)
+        for d in decisions:
+            d = dict(d)
+            d["character_id"] = character_id
+            d["thread"] = entry.get("thread")
+            d["turn"] = entry.get("turn_index")
+            guard_audit.append(d)
+    unique_fired = list(dict.fromkeys(fired_total))
+    if unique_fired:
+        save_growth_state(state, data_root)
+        mind = state.mind_state or {}
+        if mind and hasattr(storage, "append_emotion"):
+            record_mind_emotion(
+                storage,
+                character_id,
+                {
+                    "emotion": "、".join(str(k) for k in mind.keys()),
+                    "scope_id": default_scope,
+                    "turn": anchor_turn,
+                    "trigger": "off_screen:" + ",".join(unique_fired),
+                },
+            )
+    return unique_fired, guard_audit
