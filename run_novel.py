@@ -1,6 +1,6 @@
 """
 小说主流程入口：加载配置 → 创建 Orchestrator → 多回合循环（默认 2 回合）。
-在项目根执行：python run_novel.py 或 .venv\\Scripts\\python.exe run_novel.py
+在项目根执行：python run_novel.py（Linux：python3；或 .venv/bin/python）
 可选环境变量：MIN_AUTOBOOK_TURNS=3 指定回合数（默认 2）；MIN_AUTOBOOK_LOG_LEVEL=DEBUG 指定日志级别。
 """
 import logging

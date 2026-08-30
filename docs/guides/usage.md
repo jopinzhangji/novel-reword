@@ -6,7 +6,7 @@
 
 ## 一、是否可以开始执行
 
-**可以。** 主程序已具备完整流程：加载配置 → 创建编排器与 Agent → 多回合执行 → 写回事件簿/状态与角色记忆。当前角色与范围 Agent 为**壳**（固定输出），默认 LLM 为 **dummy**（不调用任何 API），因此运行后产出的是占位文案；接入真实 LLM 后（见下文「可选：使用真实 LLM」）可得到模型生成内容。
+**可以。** 主程序已具备完整流程：加载配置 → 创建编排器与 Agent → 多回合执行 → 写回事件簿/状态与角色记忆。角色与范围 Agent **已接入 LLM**（`turn()` 内拼 prompt、调用、解析输出）；默认 LLM 为 **dummy**（不调用任何 API），运行后产出的是占位文案；接入真实 LLM 后（见下文「可选：使用真实 LLM」）可得到模型生成内容。
 
 ---
 
@@ -55,23 +55,25 @@ runtime:
     initial_place: "京城"       # 不填则 "（未设定）"
 ```
 
-### 2.4 可选：使用真实 LLM（推荐通义千问）
+### 2.4 可选：使用真实 LLM
 
-若希望角色/范围 Agent 调用真实大模型（需后续在第 13 项中在 `turn()` 内接 LLM，当前主流程仍为壳），可先完成 LLM 配置。
+若希望角色/范围 Agent 调用真实大模型（Agent `turn()` 已接 LLM），只需完成 LLM 配置。
 
-**推荐：通义千问（阿里云 DashScope）**
+**当前默认：火山方舟（Volcengine Ark，OpenAI 兼容端点）**
 
-1. 在 **system_config.yaml** 的 `framework` 中设置 **`llm: tongyi`**（可选在 `llm_options` 中改 `model`，如 `qwen-plus`）。
+仓库 `config/system_config.yaml` 已配置 `framework.llm: openai_compatible`，`llm_options` 指向 `https://ark.cn-beijing.volces.com/api/coding/v3`、模型 `deepseek-v4-pro`；只需在**环境变量**（或项目根 `.env`）中设置 **`DASHSCOPE_API_KEY`** 即可。
+
+**通义千问（阿里云 DashScope）**
+
+1. 在 **system_config.yaml** 的 `framework` 中设置 **`llm: tongyi`**（或 `qwen-plus`），可选在 `llm_options` 中改 `model`（如 `qwen-plus`）、`base_url`（默认 DashScope 兼容端点）。
 2. 在**环境变量**中设置 **`DASHSCOPE_API_KEY`**（阿里云百炼 / DashScope 控制台获取）。
-
-无需填写 base_url，程序会使用 DashScope 的 OpenAI 兼容端点。详见 [design/llm-and-agents.md](../design/llm-and-agents.md)。
 
 **其他：OpenAI 或国内代理**
 
-- `llm: openai`，`llm_options` 中设 `model`、`api_key_env`（默认 `OPENAI_API_KEY`），国内代理时设 `base_url`。
+- `llm: openai`（或 `openai_compatible`），`llm_options` 中设 `model`、`api_key_env`（默认 `OPENAI_API_KEY`），国内代理时设 `base_url`。
 - 环境变量中设置对应 API Key。
 
-当前主流程**不会**在回合内调用该 LLM（角色/范围仍是壳），仅当实现第 13 项后，此处配置才会被使用。
+当前主流程在配置真实 LLM 后，回合内角色/范围 Agent 与写作前分析/正文生成等环节会调用该 LLM。详见 [design/llm-and-agents.md](../design/llm-and-agents.md)。
 
 ---
 
@@ -85,17 +87,17 @@ runtime:
 ### 3.2 自动跑多回合（不打断）
 
 ```bash
-# 在项目根目录
-python run_novel.py
-# 或
-.venv\Scripts\python.exe run_novel.py
+# 在项目根目录（Linux）
+python3 run_novel.py
+# 或（虚拟环境）
+.venv/bin/python run_novel.py
 ```
 
 - 默认执行 **2 回合**；每回合自动写回事件簿与范围状态，**不写**角色记忆（记忆写回留作者确认，见下一节）。
 - 可通过环境变量 **MIN_AUTOBOOK_TURNS** 指定回合数（1～100），例如：
   ```bash
-  set MIN_AUTOBOOK_TURNS=3
-  python run_novel.py
+  export MIN_AUTOBOOK_TURNS=3
+  python3 run_novel.py
   ```
 
 **日志**：主程序使用 `logging`，**同时输出到控制台与日志文件**。日志统一写入**日志文件夹** **`logs/`**（项目根下，自动创建）；日志文件**默认按日期命名**：**`logs/min_autobook_YYYY-MM-DD.log`**，便于多次运行分文件查看。可通过 **MIN_AUTOBOOK_LOG_DIR** 指定其他日志目录，**MIN_AUTOBOOK_LOG_FILE** 指定固定文件名（不设则用日期），**MIN_AUTOBOOK_LOG_LEVEL** 指定级别（默认 `INFO`），便于调试。

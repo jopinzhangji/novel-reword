@@ -79,9 +79,8 @@ dev_agent/
 
 | 方式 | 说明 |
 |------|------|
-| **Windows 计划任务** | 打开「任务计划程序」，新建任务，触发器设为每日/每小时等，操作：启动程序 `项目根\.venv\Scripts\python.exe`，参数 `run_dev_agent.py`，起始于项目根。 |
-| **cron（Linux/macOS）** | 例如每小时：`0 * * * * cd /path/to/min-autobook && .venv/bin/python run_dev_agent.py` |
-| **按需** | 在项目根执行 `python run_dev_agent.py` 或 `.venv\Scripts\python.exe run_dev_agent.py`；或配置 `trigger: on_demand` 由 CI/脚本触发。 |
+| **cron（Linux/macOS）** | 例如每小时：`0 * * * * cd /path/to/novel-reword && .venv/bin/python run_dev_agent.py` |
+| **按需** | 在项目根执行 `python3 run_dev_agent.py`（或 `.venv/bin/python run_dev_agent.py`）；或配置 `trigger: on_demand` 由 CI/脚本触发。 |
 | **continuous（可选）** | 若配置 `trigger: continuous`，可后续实现「循环：run_once + sleep(interval)」，在后台定时跑；当前未实现，可用系统计划任务代替。 |
 
 ### 3. 第一个任务开始后的闭环：Cursor 产出下一步计划 → DevAgent 转述 → 循环直到功能完成

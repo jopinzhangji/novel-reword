@@ -1,5 +1,5 @@
 """
-DevAgent 入口脚本：在项目根执行 python run_dev_agent.py 或 .venv\\Scripts\\python.exe run_dev_agent.py
+DevAgent 入口脚本：在项目根执行 python run_dev_agent.py（Linux：python3；或 .venv/bin/python）
 执行一次自我迭代（运行测试 -> 写 dev_agent/output -> 供 Cursor 读取）。
 """
 import sys

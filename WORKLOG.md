@@ -2,14 +2,39 @@
 
 每日追加更新，记录当日完成工作、优劣分析及下一步计划。
 
-### 速览：当前状态与下一步（2026-06-14）
+### 速览：当前状态与下一步（2026-08-30）
 
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点** + **W 系列 W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
+| **近期已完成** | **2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）；**2026-08-27** **Linux 迁移收口**（开发环境文档 Linux 化、入口 EOF 健壮性、过时状态描述修正，全量 251 通过）；**2026-06-14** **D9** 小说阅读 Web UI **W0 文档闸**；**2026-05-01** 设定讨论链（检索压缩、Assembler 分层、超时重试、I5）。 |
 | **当前优先** | **工程主线**：**MVP-2**、任务 E；**D9 工作台**：W1→W2→**W3 设定交互**→**W4 章节交互**；**CC-b**；**I6**。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
+
+---
+
+## 2026-08-30
+
+### 真实 LLM 联调验证（Linux 移植收尾）
+
+- **背景**：2026-08-27 Linux 迁移收口时，LLM 侧仅完成配置对齐，真实联调未验证；本次补上「真实 LLM 下作者在环一回合全链路」验证，闭合 Linux 移植最后一项。
+- **LLM 端点**：`config/system_config.yaml` 的 `framework.llm_options` 切换为 **火山方舟（Volcengine Ark）OpenAI 兼容端点** `https://ark.cn-beijing.volces.com/api/coding/v3`，模型 **deepseek-v4-pro**；密钥仍走 `DASHSCOPE_API_KEY` 环境变量（`.env` 本地注入，gitignored）。
+- **验证产物**：新增 `tests/integration/test_llm_live_e2e.py` —— 真实 LLM 下作者在环一回合全链路（设定保留→y 完成→写作前分析（LLM）→正文生成（LLM）→阶段一 y→事件簿/状态写回→阶段二 y→角色记忆写回）；**默认跳过**，仅在项目根 `.env` 同时含 `DASHSCOPE_API_KEY` 与 `LLM_E2E=1` 时执行。辅助脚本 `_llm_e2e_runner.py`（本地临时清理/移植，不入库）已删除。
+- **结果**：LLM smoke（`deepseek-v4-pro` 应答正常）+ 全链路 E2E **通过**；正文落盘 `data/book/events/main/events/turn_0001.md`（真实模型产出，含「摘要/正文」段）；日志含「设定阶段结束，进入正篇」「已写回角色记忆」。
+- **收尾**：`.env` 中 `LLM_E2E=1` 已移除（保留 Key），默认 `pytest tests/` 跳过 live 用例；全量 **251 通过 + 1 跳过（live）**。
+- **后续**：回到工程主线 **MVP-2**、任务 E、**D9 工作台 W1**、**CC-b**、**I6**（见 [docs/planning/next-iteration.md](./docs/planning/next-iteration.md)）。
+
+---
+
+## 2026-08-27
+
+### Linux 迁移收口（开发环境与文档）
+
+- **背景**：本项目最初在 Windows 下开发；经核验，代码本身纯 Python 跨平台（统一 `pathlib`、全部文件 I/O 显式 `encoding="utf-8"`、无 Windows 专用库、无硬编码盘符）。「移植」工作集中在**开发环境文档、入口健壮性与过时文档状态**。
+- **Linux 实测基线**：全量测试 250 通过；`run_novel.py`、`run_dev_agent.py`、`run_novel_with_author.py`（启动/配置/交互引导）均正常运行；依赖（含 playwright + chromium）齐备。
+- **入口健壮性**：`run_novel_with_author.py` 主入口捕获 `EOFError`/`KeyboardInterrupt`，优雅提示退出（原为打印崩溃栈）；新增集成测试 `test_entry_script_exits_cleanly_on_stdin_eof`（子进程 stdin=DEVNULL，断言无 Traceback、含中断提示、非零退出码）。全量 251 通过。
+- **文档 Linux 化**：`docs/guides/development.md` 重写为 Linux 指引（venv/依赖/常用命令/环境自检/LLM Key 配置）；`README.md` 修正「当前状态」（原「代码结构为占位，待实现」严重过时）与 Git 提交指引（去除 PowerShell/--trailer 历史段落）；`usage.md` 修正「Agent 为壳/主流程不调 LLM」过时描述、命令改 `python3`/`export`；`git-commit.md`、`cursor-and-devagent-workflow.md`（去 Windows 计划任务行）、`tests/README.md`、`SPEC_SDD.md` O2 行、三个入口脚本 docstring、`src/agents/dev/agent.py` 建议文案同步去 Windows 专有命令。WORKLOG 历史条目保留原文（历史记录不改写）。
+- **LLM**：`config/system_config.yaml` 已是 `qwen-plus`（DashScope 兼容端点），Linux 下仅需 `export DASHSCOPE_API_KEY`；待真实联调验证（test_llm_chat + 1 回合作者在环）。
 
 ---
 

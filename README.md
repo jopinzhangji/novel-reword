@@ -14,7 +14,7 @@
 - **写代码前请阅读** [TECH_IMPLEMENTATION.md](./TECH_IMPLEMENTATION.md)（技术实现框架与方案）。
 - **文档体系（规约 / SDD / 索引）**：[docs/README.md](./docs/README.md)；流程说明 [docs/framework/SPEC_SDD.md](./docs/framework/SPEC_SDD.md)。
 - **用 Cursor 开发时**：见 [docs/guides/cursor-and-devagent-workflow.md](./docs/guides/cursor-and-devagent-workflow.md)（Cursor 与 DevAgent 协同自我迭代）；待办任务见 [docs/planning/next-iteration.md](./docs/planning/next-iteration.md)。
-- **Windows 开发环境**：见 [docs/guides/development.md](./docs/guides/development.md)（路径、虚拟环境、常用命令等）。
+- **Linux 开发环境**：见 [docs/guides/development.md](./docs/guides/development.md)（虚拟环境、依赖、常用命令等；本项目最初在 Windows 下开发，代码跨平台，现以 Linux 为主）。
 - **Agent 框架与大模型 API**：当前**未使用**任何 Agent 框架或 LLM API，智能部分**直接使用 Cursor 能力**；可选接入方式见 [docs/guides/agent-and-llm-setup.md](./docs/guides/agent-and-llm-setup.md)。
 
 ## 项目结构（规划）
@@ -46,20 +46,13 @@ min-autobook/
 
 ## 当前状态
 
-- 设计文档已就绪。
-- 代码结构为占位，待实现。
-- 工作进度与每日计划见 [WORKLOG.md](./WORKLOG.md)（工作日程纪要，每日追加更新）。
+- 核心链路已落地：配置加载、Storage、编排器与回合循环、冲突裁决、作者在环（两阶段审阅）、开书前设定阶段（自由讨论 + 归纳 + 会话持久化）、LLM 接入（OpenAI 兼容 / 通义 / 文心）、记忆与内容双写、检索注入、大纲 MVP、DevAgent 自我迭代等；`tests/` 250+ 用例全量通过。
+- 详细进度与待办见 [docs/planning/next-iteration.md](./docs/planning/next-iteration.md) 与 [WORKLOG.md](./WORKLOG.md)（工作日程纪要）。
 
 ## 版本控制（Git）
 
 - 项目已执行 **`git init`**，便于回溯与版本管理。
-- 当前文件已纳入暂存区（`git add -A`）。**请在系统终端执行提交**（Cursor 内可能因 `--trailer` 报错）：
-  ```bash
-  cd f:\learn\min-autobook
-  git commit -m "Initial commit: config, storage, context, agent shells, orchestrator, run_n_turns, resolve_turn_conflict, run_novel, tests 56 passing"
-  ```
-- 若在 Cursor 内执行 `git commit` 时出现 **unknown option `trailer`**，多为环境为 commit 自动加了 `--trailer` 而本机 Git 版本不支持。请在**系统终端**（PowerShell / cmd）中进入项目根目录执行上述命令完成首次提交。
-- 日常：`git add` → `git commit` → 按需 `git push`（若已配置远程仓库）。
+- 日常提交（在项目根目录）：`git add` -> `git commit -m "<提交说明>"` -> 按需 `git push`（远程仓库已配置 `origin/main`）。
 
 ## 如何开始
 

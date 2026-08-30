@@ -1,6 +1,6 @@
 """
 小说主流程（作者在环）：每回合先不写回 → 阶段一审阅同意后写回事件簿/状态 → 阶段二确认后写回角色记忆。
-在项目根执行：python run_novel_with_author.py 或 .venv\\Scripts\\python.exe run_novel_with_author.py
+在项目根执行：python run_novel_with_author.py（Linux：python3；或 .venv/bin/python）
 可选环境变量：MIN_AUTOBOOK_TURNS=2 指定回合数；MIN_AUTOBOOK_LOG_LEVEL=DEBUG 指定日志级别；
 MIN_AUTOBOOK_RECENT_TURNS=3 启动时展示最近若干回合的正文进展（默认 3，约等于「最近一章」粒度）。
 main() 支持可选参数 input_fn（与 AuthorSession 一致），供测试或外挂 UI 注入读入逻辑。
@@ -481,6 +481,10 @@ if __name__ == "__main__":
     print("小说主流程（作者在环）启动中...", flush=True)
     try:
         main()
+    except (EOFError, KeyboardInterrupt) as e:
+        # 交互被中断（如 Ctrl+C / stdin 关闭）：优雅退出，不打印崩溃栈
+        print(f"\n交互已中断（{type(e).__name__}），程序退出。未确认的回合内容不会写回。", flush=True)
+        sys.exit(1)
     except Exception as e:
         print(f"运行异常: {e}", flush=True)
         import traceback

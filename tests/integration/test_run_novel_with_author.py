@@ -53,3 +53,22 @@ class TestRunNovelWithAuthorFlow:
             char_events = orch.storage.get_events(cid, limit=5)
             assert len(char_events) >= 1
             assert any("summary" in e or "scope_id" in e for e in char_events)
+
+    def test_entry_script_exits_cleanly_on_stdin_eof(self, tmp_path):
+        """stdin 关闭（EOF）时入口脚本应优雅退出：不打印 Traceback，且以非零码结束（交互未完成）。"""
+        import subprocess
+        import sys
+
+        proc = subprocess.run(
+            [sys.executable, "run_novel_with_author.py"],
+            cwd=PROJECT_ROOT,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**__import__("os").environ, "MIN_AUTOBOOK_LOG_DIR": str(tmp_path / "logs")},
+        )
+        combined = proc.stdout + proc.stderr
+        assert "Traceback" not in combined
+        assert "交互已中断" in combined
+        assert proc.returncode != 0

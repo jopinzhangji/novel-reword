@@ -66,7 +66,7 @@ def run_once(config_path: Path | None = None, project_root: Path | None = None) 
         cursor_tasks.append({
             "action": "run_tests_after_fix",
             "path": "",
-            "title": "修复后重新运行测试：.venv\\Scripts\\python.exe -m pytest tests/ -v",
+            "title": "修复后重新运行测试：python -m pytest tests/ -v",
         })
     else:
         cursor_tasks.append({

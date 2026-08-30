@@ -82,7 +82,7 @@ docs/
 | 文件 | 说明 |
 |------|------|
 | [guides/usage.md](./guides/usage.md) | 使用说明 |
-| [guides/development.md](./guides/development.md) | 开发环境（Windows 等） |
+| [guides/development.md](./guides/development.md) | 开发环境（Linux） |
 | [guides/cursor-and-devagent-workflow.md](./guides/cursor-and-devagent-workflow.md) | Cursor 与 DevAgent |
 | [guides/agent-and-llm-setup.md](./guides/agent-and-llm-setup.md) | 可选 Agent 框架 / API |
 | [guides/git-commit.md](./guides/git-commit.md) | 提交说明 |

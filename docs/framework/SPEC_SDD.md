@@ -68,7 +68,7 @@
 | E1 | [planning/outline-mvp-plan.md](../planning/outline-mvp-plan.md) | MVP 执行说明 | L3 | 大纲 MVP-0/1/2 范围与验收 |
 | E2 | [planning/next-iteration.md](../planning/next-iteration.md) | 迭代清单 | L3 | 进行中 / 下一步 / 已完成 |
 | O1 | [guides/usage.md](../guides/usage.md) | 手册 | L4 | 使用方式 |
-| O2 | [guides/development.md](../guides/development.md) | 手册 | L4 | Windows 环境、命令；**§七** 代码修改前 Spec/SDD 先行 |
+| O2 | [guides/development.md](../guides/development.md) | 手册 | L4 | Linux 环境、命令；**§七** 代码修改前 Spec/SDD 先行 |
 | O3 | [guides/cursor-and-devagent-workflow.md](../guides/cursor-and-devagent-workflow.md) | 手册 | L4 | Cursor 与 DevAgent 协同 |
 | O4 | [guides/agent-and-llm-setup.md](../guides/agent-and-llm-setup.md) | 手册 | L4 | 可选框架与 API 说明 |
 | O5 | [guides/git-commit.md](../guides/git-commit.md) | 手册 | L4 | 提交约定 |
