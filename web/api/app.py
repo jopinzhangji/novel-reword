@@ -12,7 +12,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from web.api.routers import characters, console, graph, novels, outline
+from web.api.routers import characters, console, graph, novels, outline, session
+from web.api.routers.session import SessionRegistry
 
 
 def _default_root() -> Path:
@@ -28,6 +29,9 @@ def create_app(project_root: Path | str | None = None) -> FastAPI:
     root = Path(project_root) if project_root is not None else _default_root()
     app = FastAPI(title="Novel-Data Workbench (G4)")
     app.state.WORKBENCH_ROOT = root
+    # G4c 作者在环会话：注册表（data_root 一地对一）+ 可注入 run_fn（测试用假回环）
+    app.state.SESSION_REGISTRY = SessionRegistry()
+    app.state.SESSION_RUN_FN = None
 
     prefix = "/api"
     app.include_router(novels.router, prefix=prefix)
@@ -35,6 +39,7 @@ def create_app(project_root: Path | str | None = None) -> FastAPI:
     app.include_router(characters.router, prefix=prefix)
     app.include_router(outline.router, prefix=prefix)
     app.include_router(console.router, prefix=prefix)
+    app.include_router(session.router, prefix=prefix)
 
     static_dir = Path(__file__).resolve().parents[1] / "static"
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="dashboard")

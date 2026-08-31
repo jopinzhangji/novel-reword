@@ -110,6 +110,8 @@ App Shell（D9 §5.1）
 
 ## 6. 作者控制台（定制调整 + 作者在环）
 
+> **G4c 落地位置（2026-08-31）**：作者在环会话与互斥门已编码——`src/author_harness/workbench_ingress.py`（`WebInputAdapter` 阻塞式 pending→reply 桥 + `LogOnlyAuthorIngress` 仅日志入口）、`web/api/session_runner.py`（`WorkbenchSession` 后台线程跑 `run_novel_with_author.main(input_fn=adapter.read)` + `SessionRegistry` data_root 一地对一新会话锁）、`web/api/routers/session.py`（建/pending/reply/abort/delete；已活跃 data_root 建会 409）。互斥门 `author_workbench.enabled`（默认 `false`）在 `config/novel_writing.yaml`，CLI 直跑且 `enabled=true` 时经 `LogOnlyAuthorIngress` 不读 stdin、仅打印 `[作者在环] AWAIT_AUTHOR` 日志（见 `run_novel_with_author.main` 顶部互斥门）。写口仍走 G3 白名单。
+
 ### 6.1 单交互通道（互斥：前端打开 ⇒ 终端对作者交互静默）
 
 **作者控制台是当前作者交互的**唯一入口（D9 §5.5「互斥模式」）：`author_workbench.enabled=true` 时，
@@ -146,7 +148,7 @@ Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既有回环
 | **G4 文档闸** | 本 SDD + D13 登记 + next-iteration 标注 + WORKLOG | ✅（2026-08-31） |
 | **G4a 后端 Read Api**（首选可交付） | `novels`/`graph`/`characters`/`outline`/`console` Read 与写口（全委托既有模块） | 单测全绿；无 LLM；多小说/单小说/控制台三类断言 ✅（2026-08-31：`src/workbench/` 服务层 20 单测 + 全量 **395 通过 + 1 跳过**；FastAPI router 留 G4b 薄包装） |
 | **G4b 前端壳 + 图谱页** | 承接 D9 W1–W2；顶置作品索引 + 各数据图谱组件（力导/雷达/时间线/节拍条/信息视野） | 浏览器可查看多小说进度与单小说六类图谱（读 G4a） ✅（2026-08-31：`web/api/app.py` FastAPI 工厂 + 五 router 薄包装 `src/workbench/` + `web/static/index.html` 无构建静态仪表盘；10 条 TestClient 单测，全量 **405 通过 + 1 跳过**；React/Vite 前端仍留 W 系列替换静态页） |
-| **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） |
+| **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） ✅（2026-08-31：`WebInputAdapter`/`LogOnlyAuthorIngress` + `WorkbenchSession`/`SessionRegistry` + `session.py` router（409 互斥 + pending/reply/abort/delete）；11 条单测，全量 **416 通过 + 1 跳过**） |
 
 ---
 

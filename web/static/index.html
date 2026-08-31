@@ -63,7 +63,10 @@
   </section>
   <section id="secChars" hidden><h2>人物情况</h2><div id="chars"></div></section>
   <section id="secRhythm" hidden><h2>章节 · 节拍情志条</h2><div id="rhythm"></div></section>
-  <section id="secConsole" hidden><h2>作者控制台（能力 / 镜头 / 备选稿）</h2><div id="consoleBox"></div></section>
+  <section id="secConsole" hidden><h2>作者控制台</h2>
+    <div id="sessionBox" style="border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:6px"></div>
+    <div><h3 style="font-size:14px;margin:12px 0 8px">定制调整（能力 / 镜头 / 备选稿）</h3><div id="consoleBox"></div></div>
+  </section>
 </main>
 
 <script>
@@ -110,6 +113,7 @@ async function loadNovel(){
   if (!currentSlug) return;
   ["secSummary","secGraph","secChars","secRhythm","secConsole"].forEach(id => el(id).hidden = false);
   await loadSummary(); await loadGraph(); await loadChars(); await loadRhythm(); await loadConsole();
+  await loadSession();
 }
 
 async function loadSummary(){
@@ -262,6 +266,88 @@ async function promoteDraft(){
     body: JSON.stringify({ chapter_id: el("draftChapter").value, lens_id: el("draftLens").value }) });
   alert(r.promoted ? `已提升 → ${r.lens_id}` : `未提升：${r.reason}`);
   loadConsole();
+}
+
+/* ---- 作者在环（G4c Session，互斥模式）---- */
+let sessionKey = null, sessionTimer = null;
+
+async function loadSession(){
+  if (!currentSlug){ return; }
+  // 续接同一 uvicorn 进程内已存在的会话（GET 404 = 无会话）
+  try {
+    const s = await j(`/api/session/${currentSlug}`);
+    sessionKey = currentSlug;
+    renderSession(s);
+  } catch(e){ sessionKey = null; renderSession({ status:"none" }); }
+}
+
+function startSessionPoll(){
+  if (sessionTimer) return;
+  sessionTimer = setInterval(pollSession, 900);
+}
+function stopSessionPoll(){
+  if (sessionTimer){ clearInterval(sessionTimer); sessionTimer = null; }
+}
+
+async function pollSession(){
+  if (!sessionKey){ stopSessionPoll(); return; }
+  try {
+    renderSession(await j(`/api/session/${sessionKey}`));
+  } catch(e){ sessionKey = null; stopSessionPoll(); renderSession({ status:"none" }); }
+}
+
+function renderSession(s){
+  const bar = el("sessionBox");
+  if (!s || s.status === "none"){
+    stopSessionPoll();
+    bar.innerHTML = `<div class="mini"><h4>作者在环（互斥）</h4><div>
+      <button onclick="startSession()">开始作者在环</button>
+      </div><div class="mut" style="margin-top:6px">author_workbench.enabled=true 时终端不读 stdin，作者交互只在前端（G3 / 大纲推进 / 回合审阅 prompt 全走这里）。</div></div>`;
+    return;
+  }
+  const st = s.status;
+  let body;
+  if (st === "running"){
+    body = s.pending_prompt
+      ? `<div><b>待作者答复</b></div>
+         <div class="mut" style="margin:4px 0;white-space:pre-wrap">${esc(s.pending_prompt)}</div>
+         <textarea id="replyInput" rows="2" style="width:100%"></textarea>
+         <button onclick="replySession()">提交回复</button>`
+      : `<span class="mut">…引擎处理中（非待答）…</span>`;
+  } else if (st === "done"){ body = `<span class="mut">已完成本会话。</span>`; }
+  else if (st === "failed"){ body = `<span class="noseq">失败：${esc(s.error || "?")}</span>`; }
+  else { body = `<span class="mut">已中止（被阻塞的输入已解除，不挂死）。</span>`; }
+  bar.innerHTML = `<div class="mini"><h4>作者在环会话 <span class="tag">${esc(st)}</span>
+      <span class="slug" style="font-size:11px">data_root: ${esc(s.data_root || "")}</span></h4>
+    ${body}
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+      ${st === "running" ? `<button onclick="abortSession()">中止</button>` : ""}
+      <button onclick="endSession()">结束并清理</button>
+    </div></div>`;
+  startSessionPoll();
+}
+
+async function startSession(){
+  const r = await j(`/api/session`, { method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ slug: currentSlug, data_root: currentSlug }) });
+  sessionKey = r.key;
+  renderSession(r);
+}
+async function replySession(){
+  const text = el("replyInput").value;
+  const r = await j(`/api/session/${sessionKey}/reply`, { method:"POST",
+    headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ text }) });
+  renderSession(r);
+}
+async function abortSession(){
+  const r = await j(`/api/session/${sessionKey}/abort`, { method:"POST" })
+    .then(x => x).catch(() => ({ status: "gone" }));
+  renderSession(r.status === "gone" ? { status:"none" } : r);
+}
+async function endSession(){
+  await j(`/api/session/${sessionKey}`, { method:"DELETE" }).catch(() => {});
+  sessionKey = null; stopSessionPoll(); renderSession({ status:"none" });
 }
 
 loadCards();

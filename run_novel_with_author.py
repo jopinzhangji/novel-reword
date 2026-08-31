@@ -65,6 +65,18 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
     # 先单独加载 runtime 以读取 debug 开关，再应用 DEBUG 日志，这样后续 load_all_config 的 DEBUG 才会输出
     runtime_pre = load_runtime_config(config_dir)
     apply_design_phase_debug(runtime_pre)
+    # G4c 互斥门：author_workbench.enabled=true 且未注入输入源（如前端 adapter）时，
+    # 终端不读 stdin、仅日志，作者交互转前端（D9 §6.1/§10 + D13 §6.1）。
+    _awb_enabled = bool(
+        ((runtime_pre.get("runtime") or {}).get("author_workbench") or {}).get("enabled", False)
+    )
+    if input_fn is None and _awb_enabled:
+        from src.author_harness.workbench_ingress import LogOnlyAuthorIngress
+
+        input_fn = LogOnlyAuthorIngress()
+        log.info(
+            "[作者在环] author_workbench.enabled=true：作者交互转前端；终端仅日志（不读 stdin）。"
+        )
     # 新小说引导：若无设定且无正文，自动准备最小配置并强制进入完整设定交互
     bootstrap_triggered = prepare_new_novel_if_needed(
         config_dir=config_dir,

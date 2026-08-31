@@ -5,5 +5,9 @@ setting_research:
 turn_based: true
 author_in_the_loop: true
 turn_body_max_chars: 2000
+# G4c 互斥作者控制台：true 时作者的一切交互只在前端（web/api Session Runner →
+# pending_prompt → POST /reply）；CLI 不读 stdin、不弹作者菜单，仅打印日志。
+author_workbench:
+  enabled: false
 storage:
   data_root: data
