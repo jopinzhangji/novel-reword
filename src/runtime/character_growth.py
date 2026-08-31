@@ -603,3 +603,75 @@ def apply_off_screen_transitions(
                 },
             )
     return unique_fired, guard_audit
+
+
+def apply_off_screen_batch(
+    storage: Any,
+    data_root: Path,
+    *,
+    character_id: str,
+    guard: GrowthGuard | None = None,
+    max_entries: int | None = None,
+    default_scope: str = "off_screen",
+) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    G1c 屏外演进**批处理**（`trigger=batch`）：把该角色 `threads/off_screen.yaml` 中**尚未消费**（无 `consumed` 标记）的
+    屏外条目一次性回放进其成长状态——跨条目平衡（先损耗后可收益）在批内保持，复用 `apply_off_screen_transitions` 与
+    `GrowthGuard`；随后把本轮处理的条目标记 `consumed=true` 并整表写回（幂等）。
+
+    - **无新戏不空转**：待处理为空时直接返回 `([], [], [])`，不再扫成长/写盘。
+    - **批次上限**：`max_entries` 仅截断本轮待处理条目数（治批量过大，安全钳），剩余留待下轮。
+    - 返回 `(fired, guard_audit, consumed_entries)`——consumed_entries 为本轮回放进成长并标 consumed 的条目字典。
+    """
+    if not character_id:
+        return [], [], []
+    from src.runtime.file_sync import load_off_screen_threads, write_off_screen_threads
+
+    entries = load_off_screen_threads(data_root, character_id)
+    pending = [e for e in entries if not e.get("consumed")]
+    if not pending:
+        return [], [], []
+    if max_entries and max_entries > 0:
+        pending = pending[:max_entries]
+    fired, audit = apply_off_screen_transitions(
+        storage,
+        data_root,
+        character_id=character_id,
+        entries=pending,
+        guard=guard,
+        default_scope=default_scope,
+    )
+    pending_ids = {id(p) for p in pending}
+    updated: list[dict[str, Any]] = []
+    for e in entries:
+        if id(e) in pending_ids:
+            e = dict(e)
+            e["consumed"] = True
+        updated.append(e)
+    write_off_screen_threads(data_root, character_id, updated)
+    return fired, audit, pending
+
+
+def scan_off_screen_batch_for_all(
+    storage: Any,
+    data_root: Path,
+    *,
+    character_ids: list[str] | tuple[str, ...],
+    guard: GrowthGuard | None = None,
+    max_entries: int | None = None,
+) -> tuple[dict[str, list[str]], list[dict[str, Any]]]:
+    """
+    G1c 屏外批处理**扫描入口**（`trigger=batch`，batch 调度点在编排器/回环侧调用）：
+    对配置的每个关键角色跑一次 `apply_off_screen_batch`（无待处理条目的角色自动空转跳过），
+    汇总 `(fired_by_char, guard_audit)`。全程无 LLM、默认不进主书事件簿。
+    """
+    fired_by_char: dict[str, list[str]] = {}
+    guard_audit: list[dict[str, Any]] = []
+    for cid in sorted({str(x) for x in character_ids if x}):
+        fired, audit, _ = apply_off_screen_batch(
+            storage, data_root, character_id=cid, guard=guard, max_entries=max_entries
+        )
+        if fired:
+            fired_by_char[cid] = fired
+        guard_audit.extend(audit)
+    return fired_by_char, guard_audit

@@ -187,10 +187,22 @@ def append_off_screen_thread(novel_root: Path, character_id: str, entry: dict) -
     entry = dict(entry)
     entries = load_off_screen_threads(novel_root, character_id)
     entries.append(entry)
+    return write_off_screen_threads(novel_root, character_id, entries)
+
+
+def write_off_screen_threads(novel_root: Path, character_id: str, entries: list[dict]) -> Path:
+    """
+    G1 整表写回该角色屏外线条目（append / G1c batch 消费标记共用）。返回写入的路径。
+    entries 中条目保留原 dict（含 batch 打上的 `consumed` 标记），YAML 顶层 `{version, entries}`。
+    """
     path = off_screen_threads_yaml_path(novel_root, character_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        yaml.safe_dump({"version": _OFF_SCREEN_YAML_VERSION, "entries": entries}, allow_unicode=True, sort_keys=False),
+        yaml.safe_dump(
+            {"version": _OFF_SCREEN_YAML_VERSION, "entries": entries},
+            allow_unicode=True,
+            sort_keys=False,
+        ),
         encoding="utf-8",
     )
     return path

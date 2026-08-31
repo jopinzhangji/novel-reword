@@ -7,7 +7,7 @@
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点：G1–G3 方向主轴 + W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测）、**G1b 桥接注入 ✅**（`bridging.py` + `TurnContext.bridging_snippet` + 正文 prompt 桥接块 + 回环按 `parallel_threads.enabled`/`bridge_ids` 门控注入，9 条单测，全量 **347 通过 + 1 跳过**）；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
+| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测）、**G1b 桥接注入 ✅**（`bridging.py` + `TurnContext.bridging_snippet` + 正文 prompt 桥接块 + 回环按 `parallel_threads.enabled`/`bridge_ids` 门控注入，9 条单测，全量 **347 通过 + 1 跳过**）、**G1c 屏外批处理 ✅**（`write_off_screen_threads` + `apply_off_screen_batch`/`scan_off_screen_batch_for_all`，`trigger=batch` 幂等演进，4 条单测，全量 **351 通过 + 1 跳过**）；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
 | **当前优先** | **方向**：**多视角独立演进 ⊕ 单一主角导出** + **用户可调**（增强默认关、可开可关）。**G 系列**：**G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3，最对齐空白）→ **G2 演进层 ↔ 策略层耦闸**（成长/关系/视野进 PacingContract/Critic，节拍 tags 实影响成长）→ **G3 用户可调收敛 + 运行时主角切换**（D9 `/system` 可写出口）。**续工程**：**D9 W1→W4**、**CC-b**、**I6**、任务 E、同文导出。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
 
@@ -68,6 +68,19 @@
 - **`run_novel_with_author.py`**：回环内按 `runtime.parallel_threads.enabled`（默认 false）+ `bridge_ids` 门控，从 `orch.storage` `build_bridging_snippet_from_storage` 组装并传入两处 `generate_turn_body`；缺配置/异常 → 空串，船身不破。
 - **测试**：新增 `tests/unit/test_bridging.py` 9 条——`format_bridging_snippet` 空/标签/预算截断；`build_bridging_snippet_from_storage` 默认关、`bridge_ids` 明示、已在场跳过、无条目空串；`TurnContext` 字段往返；`build_turn_body_prompt` 有桥接块/无桥接块。全量回归 **347 通过 + 1 跳过（live）**（基线 338 + 9）。
 - **下一步**：**G1c（可选）**（`trigger=batch`：每 `batch_turns` 扫一次各角色 `threads` 累积演进），加载态桥接菜单作者补屏外戏/勾选留后续。
+
+## 2026-08-31（再续三）
+
+### G1c 编码：屏外线批处理（trigger=batch，幂等演进）
+
+- **范围**：SDD D10 §4/§8 **G1c（可选）**——`trigger=batch` 时每 `batch_turns` 扫一次各角色 `threads` 已累积未消费屏外条目，一次性回放进成长状态；**无新戏不空转、幂等**。默认关，不改变既有回合行为。
+- **`src/runtime/file_sync.py`**：新增 `write_off_screen_threads(novel_root, character_id, entries)` 整表写回（`append` 与 batch 消费标记共用），refactor 原 `append_off_screen_thread` 委托之。
+- **`src/runtime/character_growth.py`**：
+  - `apply_off_screen_batch(storage, data_root, *, character_id, guard, max_entries)`——取 `threads` YAML 中无 `consumed` 标记的条目，一次性交 `apply_off_screen_transitions` 回放（**跨条目平衡批内保持**），随后把本轮条目标 `consumed=true` 整表写回 → 再扫即空转（幂等）；`max_entries` 只截断本轮批次，剩余留待下轮；返回 `(fired, guard_audit, consumed)`。
+  - `scan_off_screen_batch_for_all(storage, data_root, *, character_ids, guard, max_entries)`——按配置角色扫描入口，无待处理条目自动空转，汇总 `(fired_by_char, guard_audit)`。
+- **`run_novel_with_author.py`**：回环前预读一次 `parallel_threads` 配置（桥接/批处理共用）；仅当 `enabled && trigger=="batch"` 且 `(turn+1)%batch_turns==0` 时对 `orch.character_agents.keys()` 跑 `scan_off_screen_batch_for_all`（`GrowthGuard` + `batch_budget_entries` 上限），异常降级 WARN 不影响主书。
+- **测试**：新增 `tests/unit/test_off_screen_batch.py` 4 条——无待处理空转；批次触发演进 + 消费标记落盘 + 幂等二扫不重复涨；`max_entries` 上限分成两批消费；扫描入口跳过无内容角色。全量回归 **351 通过 + 1 跳过（live）**（基线 347 + 4）。
+- **下一步**：**G2 演进层 ↔ 叙事策略层耦闸**（成长/关系/视野进 PacingContract/Critic，节拍 `tags` 实影响成长）；G1 串（屏外演进 + 桥接 + 批处理）收口。
 
 ---
 

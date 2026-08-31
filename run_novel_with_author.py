@@ -270,6 +270,10 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
     if main_characters_snippet:
         log.debug("[主角注入] 已生成主角与主要角色提示块")
     _outline_warned = False  # Opt-6：首损 WARN 一次、连续失败才降级 debug
+    # G1 屏外线：读取并行线程配置（默认关）。桥接注入(bridge)与批处理(batch)共用同一配置块。
+    pt_cfg = runtime.get("parallel_threads") or {}
+    if not pt_cfg:
+        pt_cfg = (runtime.get("runtime") or {}).get("parallel_threads") or {}
     for turn in range(n):
         log.info("===== 回合 %s/%s =====", turn + 1, n)
         outline_snippet = ""
@@ -396,11 +400,38 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             world_config=orch.world_config,
             last_turn_summary=last_summary,
         )
+        # G1c 批处理触发：仅当 parallel_threads.enabled && trigger=="batch" 时，每 batch_turns 回合
+        # 扫一次各关键角色已累积未消费的屏外条目（无新戏自动空转，幂等）。默认关 → 不触发。
+        if pt_cfg and bool(pt_cfg.get("enabled", False)) and pt_cfg.get("trigger") == "batch":
+            _batch_turns = int(pt_cfg.get("batch_turns", 5) or 5)
+            if _batch_turns > 0 and (turn + 1) % _batch_turns == 0:
+                try:
+                    from src.runtime.character_growth import (
+                        GrowthGuard,
+                        scan_off_screen_batch_for_all,
+                    )
+                    from src.runtime.file_sync import get_data_root as _batch_get_data_root
+                    _batch_dr = _batch_get_data_root(PROJECT_ROOT, runtime)
+                    _batch_cids = list(orch.character_agents.keys())
+                    _fired_by_char, _b_audit = scan_off_screen_batch_for_all(
+                        orch.storage,
+                        _batch_dr,
+                        character_ids=_batch_cids,
+                        guard=GrowthGuard(),
+                        max_entries=int(pt_cfg.get("batch_budget_entries", 0) or 0) or None,
+                    )
+                    if _fired_by_char:
+                        log.info(
+                            "[屏外批处理] 第 %s 回合扫描：%s",
+                            turn + 1,
+                            {c: f for c, f in _fired_by_char.items()},
+                        )
+                    if _b_audit:
+                        log.debug("[屏外批处理] guard_audit=%s", _b_audit[:3])
+                except Exception as _be:
+                    log.warning("屏外批处理失败（忽略，不影响主书）: %s", _be)
         # G1b 桥接：仅当 runtime.parallel_threads.enabled=true 且配置了 bridge_ids 时才注入屏外结果摘要。
         # 默认关闭（false/无配置）→ 空串，不改变主书正文行为。
-        pt_cfg = runtime.get("parallel_threads") or {}
-        if not pt_cfg:
-            pt_cfg = (runtime.get("runtime") or {}).get("parallel_threads") or {}
         bridging_snippet = ""
         if pt_cfg and bool(pt_cfg.get("enabled", False)):
             try:
