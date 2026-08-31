@@ -271,18 +271,34 @@ _RULES: list[dict[str, Any]] = [
 
 _RULE_INDEX = {r["name"]: r for r in _RULES}
 
+# G2 节拍标签 → 成长迁移规则补足映射（粗粒度维度驱动；未收录/未知标签一律忽略）。默认关（调用方不给 beat_tags 则无副作用）。
+BEAT_TAG_TO_RULES: dict[str, tuple[str, ...]] = {
+    "growth:power": ("near_death", "conflict_showdown"),
+    "growth:social": ("rescue_debt", "romance", "trusted_betrayal"),
+    "growth:goal": ("goal_affirmed", "trusted_betrayal"),
+    "growth:loss": ("deep_loss",),
+    "growth:gain": ("resource_gain",),
+    "growth:pivot": ("resource_loss", "horror_trap"),
+}
 
-def match_rules_for_event(summary: str) -> list[str]:
+
+def match_rules_for_event(summary: str, extra_tags: list[str] | tuple[str, ...] = ()) -> list[str]:
     """
     对事件摘要命中哪些迁移规则（按顺序返回 rule 名）。summary 为空返回空。
+    G2：`extra_tags`（节拍 `BeatContext.tags`）可按 `BEAT_TAG_TO_RULES` **补足**规则命中——节拍意图实测
+    影响当回合演进（仍经 GrowthGuard 复核守恒）。默认空 → 与既有关键词命中逻辑逐字节一致。
     """
     text = (summary or "").strip()
-    if not text:
-        return []
     fired: list[str] = []
-    for rule in _RULES:
-        if any(k in text for k in rule["keywords"]):
-            fired.append(rule["name"])
+    if text:
+        for rule in _RULES:
+            if any(k in text for k in rule["keywords"]):
+                fired.append(rule["name"])
+    if extra_tags:
+        for tag in extra_tags:
+            for name in BEAT_TAG_TO_RULES.get(str(tag), ()):
+                if name not in fired and name in _RULE_INDEX:
+                    fired.append(name)
     return fired
 
 
@@ -296,7 +312,7 @@ def apply_growth_transition(
     event_bundle 建议含 summary/scope_id/turn_index。
     """
     summary = str(event_bundle.get("summary") or "")
-    fired = match_rules_for_event(summary)
+    fired = match_rules_for_event(summary, extra_tags=event_bundle.get("beat_tags") or ())
     log_suffix = []
     for name in fired:
         rule = _RULE_INDEX[name]
@@ -443,7 +459,7 @@ def apply_growth_transition_guarded(
     transition_log（含失败规则与原因），满足 §7.1 可观测；计数维度越界做「最小安全迁移」钳制到界限。
     """
     summary = str(event_bundle.get("summary") or "")
-    fired = match_rules_for_event(summary)
+    fired = match_rules_for_event(summary, extra_tags=event_bundle.get("beat_tags") or ())
     if guard is None:
         state, _ = apply_growth_transition(state, event_bundle)
         decisions: list[dict[str, Any]] = []
@@ -507,6 +523,7 @@ def apply_growth_transition_for_turn(
     event_entry: dict[str, Any] | None = None,
     characters_config: dict[str, Any] | None = None,
     guard: GrowthGuard | None = None,
+    beat_tags: list[str] | tuple[str, ...] = (),
 ) -> tuple[dict[str, list[str]], list[dict[str, Any]]]:
     """
     编排器在回合写回后调用：对每个**在场**关键角色（信息视野一致，只有亲身经历者受影响）加载成长状态、
@@ -524,6 +541,7 @@ def apply_growth_transition_for_turn(
             "scope_id": scope_id,
             "turn_index": turn_index,
             "character_id": cid,
+            "beat_tags": tuple(beat_tags),
         }
         state, fired, decisions = apply_growth_transition_guarded(state, bundle, guard)
         results[cid] = fired

@@ -1,7 +1,7 @@
 # G2 SDD：演进层 ↔ 叙事策略层耦闸（Evolution ↔ Pacing Coupling）
 
 **代号**：**G2**（全仓梳理 2026-08-31 三大优化主轴之二；紧接 **G1** 屏外线/并列主线）。
-**类型**：SDD（L2）。**登记**：**[SPEC_SDD.md](../framework/SPEC_SDD.md) D11**。**状态**：**文档闸 ✅**（2026-08-31）；编码待评审后动。
+**类型**：SDD（L2）。**登记**：**[SPEC_SDD.md](../framework/SPEC_SDD.md) D11**。**状态**：**文档闸 ✅、编码 ✅**（2026-08-31，一次 MVP）。
 
 ---
 
@@ -133,7 +133,7 @@ runtime:
 | `src/author_loop/turn_planning.py` | `generate_turn_body(…, main_characters_snippet, bridging_snippet)` | 增 `growth_standings=None`，gated 后传入 |
 | `src/runtime/character_growth.py` | `match_rules_for_event(summary)`；`apply_growth_transition_for_turn(…, guard)` | 增 `BEAT_TAG_TO_RULES` + `match_rules_for_event(summary, extra_tags)` + `apply_growth_transition_for_turn(…, beat_tags)` |
 | `src/orchestrator/orchestrator.py` | `apply_event_and_state_write(result, scope_id, time, place)` → growth 写回 | 增 `beat_tags=()` 可选参透传 |
-| `src/context/__init__.py` | `TurnContext` 已有 bridging_snippet | 增 `growth_hint: str = ""`（可选，可观测） |
+| `src/context/__init__.py` | `TurnContext` 已有 bridging_snippet | 本轮可观测改由日志承担（`[G2] 前馈成长站姿` info/debug）而非新增 `growth_hint` 字段，避免扰动 builder 面（后续需要再补） |
 | `run_novel_with_author.py` | 回环 gated 桥接/批处理 | 按 `evolution_pacing.enabled` 加载 standings 传 body；把 `outline_beat.tags` 透传写回 |
 
 ---
@@ -142,7 +142,7 @@ runtime:
 
 | 阶段 | 内容 | 验收 |
 |------|------|------|
-| **G2 编码** | 新 `evolution_pacing.py` + 契约偏置 + Critic 悬置回响 + 节拍标签补足 + 两侧接线 + 单测 | 单测：默认关行为逐字节不变（全量回归不红）；`enabled` 时 standings 偏置契约、`payoff_edge` 评分上调、`beat_tags` 补足规则；全可观测字段有值 |
+| **G2 编码** | 新 `evolution_pacing.py` + 契约偏置 + Critic 悬置回响 + 节拍标签补足 + 两侧接线 + 单测 | ✅（2026-08-31）：`evolution_pacing.py`（`GrowthStandings`/`load_growth_standings`/`format_standings_hint`）；`resolve_pacing_contract` 增 `growth_standings` + `infer_growth_window`/`override_contract_for_growth`；`evaluate_body_against_pacing` 悬置回响；`match_rules_for_event`/`apply_growth_transition_for_turn`/`apply_event_and_state_write` 透传 `beat_tags`；`run_novel` 按 `evolution_pacing` 门控前馈/反馈；8 条单测，全量 359 通过 + 1 跳过 |
 
 **验收总纲**：默认 `enabled=false` 全量回归与 G1 末一致（351 通过 + 1 跳过）；`enabled=true` 时单测覆盖三类断言，且无 LLM 参与。
 

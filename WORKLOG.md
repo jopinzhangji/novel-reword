@@ -7,8 +7,8 @@
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点：G1–G3 方向主轴 + W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）、**G2 文档闸 · SDD D11**（演进层↔叙事策略层耦闸方案定稿，`evolution-pacing-coupling.md`，编码待评审后动）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测）、**G1b 桥接注入 ✅**（`bridging.py` + `TurnContext.bridging_snippet` + 正文 prompt 桥接块 + 回环按 `parallel_threads.enabled`/`bridge_ids` 门控注入，9 条单测，全量 **347 通过 + 1 跳过**）、**G1c 屏外批处理 ✅**（`write_off_screen_threads` + `apply_off_screen_batch`/`scan_off_screen_batch_for_all`，`trigger=batch` 幂等演进，4 条单测，全量 **351 通过 + 1 跳过**）；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
-| **当前优先** | **方向**：**多视角独立演进 ⊕ 单一主角导出** + **用户可调**（增强默认关、可开可关）。**G 系列**：**G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3，最对齐空白）→ **G2 演进层 ↔ 策略层耦闸**（成长/关系/视野进 PacingContract/Critic，节拍 tags 实影响成长）→ **G3 用户可调收敛 + 运行时主角切换**（D9 `/system` 可写出口）。**续工程**：**D9 W1→W4**、**CC-b**、**I6**、任务 E、同文导出。 |
+| **近期已完成** | **2026-08-31** **全仓结构梳理 + 「多视角独立演进 ⊕ 用户可调」方向对账**（三层子系统映射、逐功能点分析、G1/G2/G3 优化主轴归并，见本页新增条目）、**G2 文档闸 · SDD D11**（演进层↔叙事策略层耦闸方案定稿，`evolution-pacing-coupling.md`）、**G2 编码 ✅**（成长站姿前馈契约/Critic + 节拍标签补足成长，8 条单测）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测）、**G1b 桥接注入 ✅**（`bridging.py` + `TurnContext.bridging_snippet` + 正文 prompt 桥接块 + 回环按 `parallel_threads.enabled`/`bridge_ids` 门控注入，9 条单测，全量 **347 通过 + 1 跳过**）、**G1c 屏外批处理 ✅**（`write_off_screen_threads` + `apply_off_screen_batch`/`scan_off_screen_batch_for_all`，`trigger=batch` 幂等演进，4 条单测，全量 **351 通过 + 1 跳过**）、**G2 编码后全量 359 通过 + 1 跳过**；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
+| **当前优先** | **方向**：**多视角独立演进 ⊕ 单一主角导出** + **用户可调**（增强默认关、可开可关）。**G 系列**：**G1 屏外线/并列主线 ✅**（off-screen 演进 + 桥接摘要 + 批处理）→ **G2 演进层 ↔ 策略层耦闸 ✅**（成长/关系/视野进 PacingContract/Critic，节拍 tags 实影响成长）→ **G3 用户可调收敛 + 运行时主角切换**（D9 `/system` 可写出口，**下一步**）。**续工程**：**D9 W1→W4**、**CC-b**、**I6**、任务 E、同文导出。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
 
 ---
@@ -93,7 +93,19 @@
   - **前馈 · 成长→审阅**：`critic.evaluate_body_against_pacing(…, growth_standings)` 增悬置回响判据（`payoff_edge` 非空且正文未承接 → 小幅上调 `subplot_reveal_deviation`）。
   - **反馈 · 节拍→成长**：`character_growth.match_rules_for_event(summary, extra_tags)` + `BEAT_TAG_TO_RULES` 映射补足命中（节拍意图实测影响当回合演进，经 GrowthGuard 复核）；`apply_growth_transition_for_turn(…, beat_tags)` + `apply_event_and_state_write(…, beat_tags)` 透传 `outline_beat.tags`；`TurnContext.growth_hint` 可观测。
 - **配置**：`runtime.evolution_pacing.{enabled=false, beat_tags_to_growth=false}`；默认全量回归与 G1 末一致。
-- **下一步**：作者评审后按 SDD §7 编码 G2 一次 MVP，加单测（默认关逐字节不变；enabled 时偏置/评分/补足可断言），再全量回归。
+- **下一步**：作者评审后按 SDD §7 编码 G2 一次 MVP（承载下一条）。
+
+## 2026-08-31（再续五）
+
+### G2 编码：演进层 ↔ 叙事策略层耦闸（SDD D11 · 一次 MVP）
+
+- **范围**：SDD D11 §6/§7——两层在同一回合互可影响；默认关（`runtime.evolution_pacing.enabled=false`），开启才影响行为。全程无 LLM。
+- **前馈 · 成长→节奏**：新增 `src/author_harness/evolution_pacing.py`：`GrowthStandings` + `load_growth_standings`（读在场角色 `growth_state.yaml`，聚合五维计数 + 由 goal-state 里程碑/目标重估/动机转变 ≥1 判定 `payoff_edge` 兑现边缘）+ `format_standings_hint`。`policy_assembler.resolve_pacing_contract` 增 `growth_standings` 可选参 + `infer_growth_window`（有兑现边缘 → 偏置 "兑现"）+ `override_contract_for_growth`（基部契约盖写为兑现口径并追加「勿悬置兑现边缘角色回响」禁止项；基部已兑现则原样）。
+- **前馈 · 成长→审阅**：`critic.evaluate_body_against_pacing` 增 `growth_standings` 可选参 + `_with_hanging`——存在兑现边缘角色但正文无揭示词 → 判「悬置回响」，`subplot_reveal_deviation` 上调 +0.15（封顶 1.0）并追加原因。
+- **反馈 · 节拍→成长**：`character_growth` 增 `BEAT_TAG_TO_RULES`（`growth:power/social/goal/loss/gain/pivot` → 规则补足）`match_rules_for_event(summary, extra_tags)` 补足命中（未知/无标签忽略，逐字节向后兼容）；`apply_growth_transition_for_turn(…, beat_tags)` 与 `orchestrator.apply_event_and_state_write(…, beat_tags)` 透传；`run_novel` 把 `outline_beat.tags` 按 `evolution_pacing.beat_tags_to_growth` 门控传写回。
+- **接线**：`generate_turn_body`/`run_novel` 增 `growth_standings`（回环前预读 `evolution_pacing` 配置；`_evo_enabled` 时加载并 debug 日志 `[G2] 前馈成长站姿`，异常降级 None）；可观测走日志而非新增 `TurnContext.growth_hint`（SDD §6 已注明）。
+- **测试**：新增 `tests/unit/test_evolution_pacing.py` 8 条——`load_growth_standings` 兑现边缘/空；契约偏置（有兑现边缘→兑现、空/已兑现→不变、默认 None 逐字节不变）；Critic 悬置回响（上调+0.15 与原因、已揭示不计、None 一致）;`match_rules_for_event` 补足命中/未知标签忽略；`apply_growth_transition_for_turn` beat_tags 实际施加（先损耗后可放行，增益 =1）。全量回归 **359 通过 + 1 跳过（live）**（基线 351 + 8）。
+- **下一步**：G 系列三主轴已收口 G1/G2，剩 **G3 用户可调收敛 + 运行时主角切换**（能力开关外观面 + D9 `/system` 可写 + 主角镜头运行时切换）。
 
 ---
 

@@ -352,10 +352,12 @@ def generate_turn_body(
     requested_pace_mode: str | None = None,
     main_characters_snippet: str = "",
     bridging_snippet: str = "",
+    growth_standings: Any = None,
 ) -> str:
     """
     基于写作前分析与本回合 TurnResult，生成本回合小说正文，不超过 max_chars 字。
     author_requirements：作者在呈现分析时补充的本回合正文要求（视角、语气、禁止内容等），会注入 prompt。
+    growth_standings（G2，可选）：在场角色成长站姿，非 None 时前馈给节奏契约与 Critic（default None → 行为不变）。
     若 LLM 不可用则用 resolve_turn_conflict 的摘要作为正文并截断。
     """
     try:
@@ -375,6 +377,7 @@ def generate_turn_body(
             runtime_config,
             chapter_goal=chapter_goal,
             requested_mode=requested_pace_mode,
+            growth_standings=growth_standings,
         )
         pacing_prompt_block = assemble_pacing_prompt_block(pacing_contract)
         prompt = build_turn_body_prompt(
@@ -396,7 +399,7 @@ def generate_turn_body(
                 body = body[len(prefix):].strip()
         if len(body) > max_chars:
             body = body[:max_chars]
-        critic = evaluate_body_against_pacing(pacing_contract, body)
+        critic = evaluate_body_against_pacing(pacing_contract, body, growth_standings=growth_standings)
         logger.info(
             "[作者在环] critic pace_deviation=%.2f subplot_reveal_deviation=%.2f reason=%s goal_window=%s pace_mode=%s",
             critic.pace_deviation,

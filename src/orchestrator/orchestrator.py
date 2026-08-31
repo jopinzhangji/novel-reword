@@ -239,6 +239,7 @@ class Orchestrator:
         scope_id: str,
         time: str,
         place: str,
+        beat_tags: list[str] | tuple[str, ...] = (),
     ) -> None:
         """
         作者在环阶段一通过后：将本回合摘要与正文写回 scope 事件簿（记忆唯一来源）；有 data_root 时同步到磁盘，正文仅此一处持久化，展示时从 storage 取，避免多处存储不一致。
@@ -321,6 +322,7 @@ class Orchestrator:
                 present_character_ids=present,
                 event_entry=event_entry,
                 guard=GrowthGuard(),
+                beat_tags=beat_tags,
             )
             for entry in guard_audit:
                 if entry.get("action") != "allowed":

@@ -274,6 +274,11 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
     pt_cfg = runtime.get("parallel_threads") or {}
     if not pt_cfg:
         pt_cfg = (runtime.get("runtime") or {}).get("parallel_threads") or {}
+    # G2 演进层↔叙事策略层：读取耦闸配置（默认关）。开启才把成长站姿前馈给契约/Critic。
+    _evo_cfg = runtime.get("evolution_pacing") or {}
+    if not _evo_cfg:
+        _evo_cfg = (runtime.get("runtime") or {}).get("evolution_pacing") or {}
+    _evo_enabled = bool(_evo_cfg.get("enabled", False))
     for turn in range(n):
         log.info("===== 回合 %s/%s =====", turn + 1, n)
         outline_snippet = ""
@@ -430,6 +435,22 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
                         log.debug("[屏外批处理] guard_audit=%s", _b_audit[:3])
                 except Exception as _be:
                     log.warning("屏外批处理失败（忽略，不影响主书）: %s", _be)
+        # G2 前馈：开启 evolution_pacing 时加载在场角色成长站姿，前馈给节奏契约与 Critic；否则传 None（行为不变）。
+        growth_standings = None
+        if _evo_enabled:
+            try:
+                from src.author_harness.evolution_pacing import (
+                    format_standings_hint,
+                    load_growth_standings,
+                )
+                growth_standings = load_growth_standings(
+                    _dr_turn, orch.characters_config, present_character_ids=present
+                )
+                if format_standings_hint(growth_standings):
+                    log.debug("[G2] 前馈成长站姿: %s", format_standings_hint(growth_standings))
+            except Exception as _ge:
+                growth_standings = None
+                log.warning("加载成长站姿失败（忽略）: %s", _ge)
         # G1b 桥接：仅当 runtime.parallel_threads.enabled=true 且配置了 bridge_ids 时才注入屏外结果摘要。
         # 默认关闭（false/无配置）→ 空串，不改变主书正文行为。
         bridging_snippet = ""
@@ -451,6 +472,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             outline_snippet=outline_snippet,
             main_characters_snippet=main_characters_snippet,
             bridging_snippet=bridging_snippet,
+            growth_standings=growth_standings,
         )
         result.body_narrative = body
         approved, result_phase1 = review_turn_result(
@@ -513,6 +535,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
                         outline_snippet=outline_snippet,
                         main_characters_snippet=main_characters_snippet,
                         bridging_snippet=bridging_snippet,
+                        growth_standings=growth_standings,
                     )
                     result.body_narrative = body
                     approved, result_phase1 = review_turn_result(
@@ -532,7 +555,20 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             # 若重试后仍驳回，则直接跳过本回合进入下一回合。
             if not approved or result_phase1 is None:
                 continue
-        orch.apply_event_and_state_write(result_phase1, scope_id, time_str, place)
+        _beat_tags_to_growth = bool(_evo_cfg.get("beat_tags_to_growth", False)) if _evo_enabled else False
+        orch.apply_event_and_state_write(
+            result_phase1,
+            scope_id,
+            time_str,
+            place,
+            # G2 反馈：仅当 evolution_pacing.beat_tags_to_growth 开启才把节拍标签透传进成长写回
+            # 实影响当回合演进；默认关 → 空元组，行为不变。
+            beat_tags=(
+                list((outline_beat.tags if outline_beat and outline_beat.tags else ()))
+                if _beat_tags_to_growth
+                else ()
+            ),
+        )
         # 大纲 MVP-2：作者在环推进（仅当大纲启用且能定位当前节拍时；无静默跳章）
         if _dr_turn and _snap_turn is not None and outline_beat is not None:
             _cp = _snap_turn.progress or {}
