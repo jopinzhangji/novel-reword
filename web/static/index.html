@@ -25,8 +25,12 @@
             margin:18px 0; padding:16px 18px; }
   section h2 { margin:0 0 10px; font-size:15px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
-  .mini { border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; }
+  .mini { border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; transition:opacity .15s, border-color .15s, box-shadow .15s; }
   .mini h4 { margin:0 0 6px; font-size:13px; }
+  .mini.focus { border-color:var(--acc); box-shadow:0 0 0 2px var(--acc) inset, 0 1px 6px rgba(86,124,226,.3); }
+  .mini.dim { opacity:.35; }
+  .clickable { cursor:pointer; user-select:none; }
+  .clickable:hover { color:var(--acc); }
   pre { background:#0e1726; color:#cfe6ff; padding:10px; border-radius:8px; overflow:auto; font-size:12px; }
   code { background:#eef1f5; border-radius:5px; padding:1px 5px; font-size:12px; }
   button { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:6px 12px;
@@ -65,7 +69,11 @@
     </div>
     <div id="graph"></div>
   </section>
-  <section id="secChars" hidden><h2>人物情况</h2><div id="chars"></div></section>
+  <section id="secChars" hidden><h2>人物情况</h2>
+    <div style="margin-bottom:8px"><span class="mut" id="focusBar">全部角色</span>
+      <button onclick="clearFocus()" style="margin-left:8px" title="复位全部人物卡 + 全书谱">全部角色</button>
+      <span class="mut" style="margin-left:8px">（点人物卡标题 / 关系图节点聚焦）</span></div>
+    <div id="chars"></div></section>
   <section id="secRhythm" hidden><h2>章节 · 节拍情志条</h2><div id="rhythm"></div></section>
   <section id="secConsole" hidden><h2>作者控制台</h2>
     <div id="sessionBox" style="border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:6px"></div>
@@ -77,6 +85,7 @@
 <script>
 "use strict";
 let currentSlug = null;
+let focusChar = "";   // 面板 #5 跨卡联动：当前聚焦角色 id（空=全部）
 
 async function j(path, opts) {
   const r = await fetch(path, opts);
@@ -159,7 +168,7 @@ function renderGraph(g){
   });
   nodes.forEach(n => {
     const [x,y] = pos[n.id];
-    s += `<g onclick="loadEgo('${esc(n.id)}')" style="cursor:pointer">
+    s += `<g onclick="focusPerson('${esc(n.id)}')" style="cursor:pointer">
       <circle cx="${x}" cy="${y}" r="18" fill="#fff" stroke="#7d8ea0" stroke-width="1.5"/>
       <text x="${x}" y="${y+4}" text-anchor="middle">${esc(n.name || n.id)}</text></g>`;
   });
@@ -168,6 +177,32 @@ function renderGraph(g){
     <input id="pairA" placeholder="a" style="width:120px"><input id="pairB" placeholder="b" style="width:120px"><div id="pairOut"></div></div>`;
 }
 function loadEgo(id){ el("egoCenter").value = id; loadGraph(); }
+// 面板 #5 跨卡联动：聚焦角色 id —— 高亮人物卡 + 心图跳到该角色
+function focusPerson(id){
+  if (!id) return;
+  focusChar = id;
+  el("focusBar").textContent = "聚焦：" + id;
+  if (el("egoCenter")){ el("egoCenter").value = id; loadGraph(); }
+  markFocus();
+}
+function clearFocus(){
+  focusChar = "";
+  el("focusBar").textContent = "全部角色";
+  if (el("egoCenter")){ el("egoCenter").value = ""; loadGraph(true); }
+  markFocus();
+}
+// 在已渲染的人物卡上应用 focus/dim 高亮 + 滚入视野（不重新请求，default 不破）
+function markFocus(){
+  const cards = document.querySelectorAll("#chars .mini");
+  let target = null;
+  cards.forEach(card => {
+    const on = card.getAttribute("data-id") === focusChar;
+    card.classList.toggle("focus", on);
+    card.classList.toggle("dim", focusChar && !on);
+    if (on) target = card;
+  });
+  if (target && target.scrollIntoView) target.scrollIntoView({ behavior:"smooth", block:"nearest" });
+}
 
 async function loadPair(){
   const a = el("pairA").value.trim(), b = el("pairB").value.trim();
@@ -188,7 +223,7 @@ async function loadChars(){
     const gr = d.growth || {};
     const dims = ["power_state","mind_state","social_state","goal_state","resource_state"]
       .map(k => [k, gr[k] || {}]).filter(x => Object.keys(x[1]).length);
-    html += `<div class="mini"><h4>${esc(d.id)}</h4>
+    html += `<div class="mini${focusChar===d.id ? " focus" : (focusChar ? " dim" : "")}" data-id="${esc(d.id)}"><h4 class="clickable" onclick="focusPerson('${esc(d.id)}')" title="点击聚焦">${esc(d.id)}</h4>
       ${radarSVG(d.growth_radar)}
       ${growthTimeline(gr.transition_log)}
       <div class="tl" style="margin-top:6px">${dims.length ? dims.map(([k,v]) => `<div><code>${k.slice(0,-6)}</code> ${esc(Object.entries(v).map(([kk,vv]) => kk+":"+vv).join(", "))}</div>`).join("") : `<div class="mut">（无成长维度）</div>`}</div>

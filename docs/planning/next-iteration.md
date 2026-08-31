@@ -216,7 +216,7 @@
   - **#2 五维成长雷达图 ✅**（2026-08-31）：`characters.py` `character_detail` 增 `growth_radar`（`level=min(1, Σ/6)` 确定性打分，成长深度非绝对特质）+ 前端人物卡内嵌 SVG 雷达（D13 §6.6；2 单测，全量 **450 通过 + 1 跳过**）。
   - **#3 迁移日志时间线 ✅**（2026-08-31）：`characters.py::character_detail` 已含 `growth.transition_log` → 前端人物卡内按 turn 升序时间线展开（成长命中 `{rule,turn,scope_id,reason,deltas}` + guard 审计 `{rule,action,guard_reason}` 两类，guard 加「钳制/跳过」徽标），纯前端无新读口（D13 §6.6；全量回归保持绿）。
   - **#4 L1记忆 / 屏外线时间线 ✅**（2026-08-31）：`characters.py` 已含 `memories_l1`（`{turn_file,summary,layer}`）+ `off_screen_threads`（`{summary,thread?,turn_index?,scope_id?,consumed?}`）→ 前端人物卡分两节时间线（L1 按 turn_file 序 + layer 徽标；屏外 thread/turn/已消费·待消费徽标），`runtime_only_layers` 标注保留（D13 §6.6；全量回归保持绿）。
-  - **#5 跨卡联动**：点人物卡/关系节点 → 联动刷新 成长·记忆·视野·屏外·节拍 各卡（当前各卡独立加载）。验收：浏览器单小说内跨卡联动打开即联动刷新；全量回归保持绿。
+  - **#5 跨卡联动 ✅**（2026-08-31）：`focusPerson(id)` 共享焦点——点人物卡标题/关系节点 → 人物卡 `.focus` 高亮聚焦（其余 `.dim` 降强调度）+ `egoCenter` 心图跳到该角色；「全部角色」`clearFocus()` 复位全grid + 全书谱。作用域为**人物卡(成长/记忆/视野/屏外/雷达/时间线) ⇄ 关系图谱**（皆数据就绪的确定性 pane）；节拍为章节级场景数据、不按角色过滤（见 D13 §6.6 边界）。验收：单小说内点人物卡/节点即联动聚焦；全量回归保持绿。
 - **大纲与节拍 + 主角正文轴 + 多线并行（分阶段落地）**：
   - **设计文档**：`docs/design/outline-and-beats.md`
   - **MVP 执行方案（三阶段细化 + SSOT + 验收）**：`docs/planning/outline-mvp-plan.md`
