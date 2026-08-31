@@ -67,6 +67,7 @@
 | D9 | [design/novel-reader-ui.md](../design/novel-reader-ui.md) | SDD | L2 | **作者在环工作台**（Web）：阅览 + 与 CLI 等价的设定讨论/章节回合交互；Session API + `WebInputAdapter`；W0–W6 |
 | D10 | [design/parallel-thread-bridging.md](../design/parallel-thread-bridging.md) | SDD | L2 | **G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3）：屏外记忆类型、按需触发、桥接注入、成长复用 |
 | D11 | [design/evolution-pacing-coupling.md](../design/evolution-pacing-coupling.md) | SDD | L2 | **G2 演进层 ↔ 叙事策略层耦闸**：成长站姿进 PacingContract/Critic（前馈）、节拍 `tags` 实影响成长（反馈），默认关 |
+| D12 | [design/user-adjustable-and-runtime-lens.md](../design/user-adjustable-and-runtime-lens.md) | SDD | L2 | **G3 用户可调收敛 + 运行时主角切换**：统一「能力开关」`runtime.features` 外观面 + CLI/D9 `/system` 出口 + 运行时镜头 `ProtagonistContext`，默认全关 |
 | E1 | [planning/outline-mvp-plan.md](../planning/outline-mvp-plan.md) | MVP 执行说明 | L3 | 大纲 MVP-0/1/2 范围与验收 |
 | E2 | [planning/next-iteration.md](../planning/next-iteration.md) | 迭代清单 | L3 | 进行中 / 下一步 / 已完成 |
 | O1 | [guides/usage.md](../guides/usage.md) | 手册 | L4 | 使用方式 |
