@@ -146,12 +146,15 @@ class TestOrchestratorAuthorInTheLoop:
             present_character_ids=present,
             auto_write=False,
         )
-        # k 须大于当前已有事件数，否则截断窗口下长度不会随 append 增长（易假失败）
-        n_before = len(orch.storage.get_recent_events(scope_id, k=500))
+        # 用总数增量断言（而非窗口长度）：data/ 事件可随历次全量测试累计，一旦超过
+        # k=500 截断窗口，窗口长度不再随 append 增长（易假失败），故改用 get_event_count。
+        n_before = orch.storage.get_event_count(scope_id)
         orch.apply_event_and_state_write(result, scope_id, "永和十年春", "京城")
-        events = orch.storage.get_recent_events(scope_id, k=500)
-        assert len(events) >= n_before + 1
-        assert "summary" in events[0]
+        assert orch.storage.get_event_count(scope_id) >= n_before + 1, (
+            "apply_event_and_state_write 应追加至少一条 scope 事件"
+        )
+        events = orch.storage.get_recent_events(scope_id, k=1)
+        assert events and "summary" in events[0]
         orch.apply_memory_write(result, scope_id, "永和十年春", "京城")
         for cid in present:
             char_events = orch.storage.get_events(cid, limit=20)
