@@ -192,7 +192,12 @@ auth:
 - **渲染**：人物卡内按 `turn` 升序时间线展开（章节/回合 + 规则名 → 维度 label + key ±value + reason；guard 条目加「钳制/跳过」徽标 + guard_reason）。纯前端，无新读口。
 - **验收**：`GET /api/.../characters/{id}` 返回 `growth.transition_log`，卡片按 turn 顺序渲染两类条目；空日志显示「无迁移记录」；无 LLM；全量回归保持绿。
 
-**#4 L1记忆·屏外线时间线 / #5 跨卡联动**：见 next-iteration「待办·工作台面板补全」，均在数据就绪前提下纯前端展开。
+**#4 L1记忆·屏外线时间线 ✅（2026-08-31，纯前端）**：
+- **数据源**：`character_detail.memories_l1`（`character_events_on_disk`：`[{turn_file, summary, layer}]`，L1 事实已落盘）+ `character_detail.off_screen_threads`（`load_off_screen_threads`：屏外线程条目 `[{summary, thread?, turn_index?, scope_id?, consumed?}]`）。
+- **渲染**：人物卡内分两节——**L1 记忆**（按 turn_file 序，条目 summary + layer 徽标）+ **屏外线**（每条 summary + thread 标签 + turn_index + 已消费/待消费徽标）。纯前端，无新读口；`runtime_only_layers` 标注保留。
+- **验收**：`GET /api/.../characters/{id}` 返回 `memories_l1`/`off_screen_threads`，卡片两节时间线渲染；空列表显示「无…」；无 LLM；全量回归保持绿。
+
+**#5 跨卡联动**：见 next-iteration「待办·工作台面板补全」，数据已就绪、纯前端展开。
 
 ---
 
@@ -206,7 +211,7 @@ auth:
 | **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） ✅（2026-08-31：`WebInputAdapter`/`LogOnlyAuthorIngress` + `WorkbenchSession`/`SessionRegistry` + `session.py` router（409 互斥 + pending/reply/abort/delete）；11 条单测，全量 **416 通过 + 1 跳过**） |
 | **GG5 `/system` 系统设置** | D9 §5.6 LLM（只读）/工作台互斥（可写）/联网（可写）面板 | 浏览器内读 effective 设置、改 `author_workbench.enabled` + `internet_search.*` 落 per-novel `config/runtime.yaml`；get_post_set_state；LLM 只读不破启动链；全量回归保持绿 ✅（2026-08-31：详见 §6.4） |
 | **GG6 远程访问与鉴权** | 可配监听（`config/web_api.yaml` server.host/port）+ 密码登录（Basic Auth，可开关） | `python -m web.api.server` 按配置监听；`auth.enabled=true` 全站 Basic Auth（默认关不破本地/单测）；空口令启动报错不裸奔；口令恒等比较；全量回归保持绿 ✅（2026-08-31：详见 §6.5） |
-| **GG-W 工作台面板补全** | #2 五维成长雷达（`growth_radar` 确定性打分 + 前端 SVG 雷达）→ #3 迁移日志时间线 → #4 L1记忆·屏外线时间线 → #5 跨卡联动 | 数据源复用 §4 确定性模块、纯前端渲染；default 不破；全量回归保持绿。**#2 ✅（2026-08-31：`character_detail` 增 `growth_radar`，`_GROWTH_DEPTH_SCALE=6` 截断，前端人物卡内嵌雷达）· #3 ✅（2026-08-31：人物卡增 `transition_log` turn 时间线，成长命中 + guard 审计两类条目；详见 §6.6）** |
+| **GG-W 工作台面板补全** | #2 五维成长雷达（`growth_radar` 确定性打分 + 前端 SVG 雷达）→ #3 迁移日志时间线 → #4 L1记忆·屏外线时间线 → #5 跨卡联动 | 数据源复用 §4 确定性模块、纯前端渲染；default 不破；全量回归保持绿。**#2 ✅（2026-08-31：`character_detail` 增 `growth_radar`，`_GROWTH_DEPTH_SCALE=6` 截断，前端人物卡内嵌雷达）· #3 ✅（2026-08-31：人物卡增 `transition_log` turn 时间线，成长命中 + guard 审计两类条目）· #4 ✅（2026-08-31：人物卡增 L1 记忆 + 屏外线两节时间线；详见 §6.6）** |
 
 ---
 

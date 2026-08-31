@@ -191,10 +191,14 @@ async function loadChars(){
     html += `<div class="mini"><h4>${esc(d.id)}</h4>
       ${radarSVG(d.growth_radar)}
       ${growthTimeline(gr.transition_log)}
-      <div class="mut" style="margin-top:4px">视野 已知 ${d.view.known}/${d.view.total_events} · L1 记忆 ${d.memories_l1.length}</div>
-      ${dims.length ? `<div style="margin-top:4px">${dims.map(([k,v]) => `<code>${k.slice(0,-6)}</code> ${esc(Object.entries(v).map(([kk,vv]) => kk+":"+vv).join(", "))}`).join("<br>")}</div>` : ""}
+      <div class="tl" style="margin-top:6px">${dims.length ? dims.map(([k,v]) => `<div><code>${k.slice(0,-6)}</code> ${esc(Object.entries(v).map(([kk,vv]) => kk+":"+vv).join(", "))}</div>`).join("") : `<div class="mut">（无成长维度）</div>`}</div>
+      <hr style="border:none;border-top:1px dashed var(--line);margin:6px 0">
+      <div class="mut" style="font-size:12px;margin-bottom:2px">视野 已知 ${d.view.known}/${d.view.total_events}</div>
+      <div class="mut" style="font-size:12px;margin-top:4px">L1 记忆（${d.memories_l1.length}）</div>
+      ${memSection(d.memories_l1)}
+      <div class="mut" style="font-size:12px;margin-top:6px">屏外线（${d.off_screen_threads.length}）</div>
+      ${offSection(d.off_screen_threads)}
       ${d.runtime_only_layers ? `<div class="mut" style="margin-top:4px">L2/L3 为运行期内存态（未落盘）</div>` : ""}
-      ${d.off_screen_threads && d.off_screen_threads.length ? `<div class="mut">屏外线 ${d.off_screen_threads.length} 条</div>` : ""}
     </div>`;
   }
   el("chars").innerHTML = html + "</div>";
@@ -244,6 +248,26 @@ function growthTimeline(tl){
     }
     const head = `<b style="color:var(--acc)">#${e.turn==null?0:e.turn}</b>${e.scope_id ? ` <span class="mut">${esc(e.scope_id)}</span>` : ""}`;
     return `<div class="tl-row"><div>${head}</div><div>${body}</div><div class="mut" style="font-size:10px;margin-top:2px">${esc((e.reason||"").slice(0,60))}${(e.reason||"").length>60?"…":""}</div></div>`;
+  }).join("") + `</div>`;
+}
+
+// 面板 #4：L1 记忆 + 屏外线两节时间线（纯前端渲染 memories_l1 / off_screen_threads）
+function memSection(mems){
+  const m = Array.isArray(mems) ? mems : [];
+  if (!m.length) return `<div class="mut" style="margin-top:6px">无 L1 记忆</div>`;
+  return `<div class="tl">` + [...m].sort((a,b) => (a.turn_file||"").localeCompare(b.turn_file||"")).map(e => {
+    return `<div class="tl-row"><div><code style="font-size:10px">${esc(e.turn_file||"")}</code> <span class="tag" title="layer">${esc(e.layer||"")}</span></div>
+      <div class="mut" style="font-size:11px;margin-top:2px">${esc((e.summary||"").slice(0,120))}${(e.summary||"").length>120?"…":""}</div></div>`;
+  }).join("") + `</div>`;
+}
+function offSection(os){
+  const o = Array.isArray(os) ? os : [];
+  if (!o.length) return `<div class="mut">无屏外线</div>`;
+  return `<div class="tl">` + o.map(e => {
+    const used = e.consumed ? `<span class="pill warn">已消费</span>` : `<span class="pill">待消费</span>`;
+    const head = `${used}${e.turn_index!=null ? ` <b style="color:var(--acc)">#${esc(e.turn_index)}</b>` : ""}${e.thread ? ` <span class="tag">${esc(e.thread)}</span>` : ""}${e.scope_id ? ` <span class="mut">${esc(e.scope_id)}</span>` : ""}`;
+    return `<div class="tl-row"><div>${head}</div>
+      <div class="mut" style="font-size:11px;margin-top:2px">${esc((e.summary||"").slice(0,120))}${(e.summary||"").length>120?"…":""}</div></div>`;
   }).join("") + `</div>`;
 }
 
