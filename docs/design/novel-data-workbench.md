@@ -106,14 +106,32 @@ App Shell（D9 §5.1）
 
 ## 6. 作者控制台（定制调整 + 作者在环）
 
-- **定制调整（复用 G3）**：
-  | 前端动作 | G3 表面 | 写点 |
-  |---------|--------|------|
-  | 开/关某能力 | `resolve_features`+`save_features` | `config/features.yaml`（下一回合 `resolve_features` 生效） |
-  | 切换导出镜头 | `switch_protagonist`+`save_protagonist_context` | `state/protagonist_runtime.yaml`（前向；演进不动） |
-  | 生成/提升备选稿 | `write_alt_draft`/`promote_alt_draft` | `state/drafts/` +（提升）替稿并切镜头 |
-- **作者在环（沿用 D9 W3–W4）**：Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既得回环执行 plan→审阅→写回；`/system` 管理 LLM/工作台/联网。
-- **若非目标约束**：Web 不重写引擎；`author_workbench.enabled=true` 时 CLI 走 `LogOnlyAuthorIngress`、不抢 stdin（D9 §5.5）。
+### 6.1 单交互通道（互斥：前端打开 ⇒ 终端对作者交互静默）
+
+**作者控制台是当前作者交互的**唯一入口（D9 §5.5「互斥模式」）：`author_workbench.enabled=true` 时，
+**作者的一切交互只在前端进行，终端不再参与作者交互**：
+
+| `enabled` | 作者控制交互在哪 | 终端表现 |
+|-----------|-----------------|---------|
+| **`false`**（默认） | CLI（`AuthorSession.read_line`） | 完整菜单，照常输出 |
+| **`true`** | **仅前端**（`WebInputAdapter` → Session `pending_prompt`） | **不弹作者菜单、不读 stdin、不阻塞等待**；仅 `INFO/WARN` 日志与 `[作者在环] AWAIT_AUTHOR`（正文），避免「双入口混乱」 |
+
+落地要点（**MUST**）：
+1. **路由到前端的作者交互全清单**：CLI 里所有 `read_line` 作者交互点——设定讨论、作者自由输入、回合审阅（`review_turn_result`/`review_memory_plan`）、**大纲推进菜单**、以及 **G3 镜头/开关/备选稿菜单**、G1 桥接/批处理确认、重试驳回——在 `enabled=true` 时一律经 `WebInputAdapter` 输入，`pending_prompt` 推给前端，前端作答回写同通道；终端不打印这些菜单文案、不等待。
+2. **终端仅日志**：阶段/写回/Harness 字段/`[大纲进度]` 仍打终端（可观测），但**任何作者交互 prompt 不出现**；CLI 走 `LogOnlyAuthorIngress`（不抢 stdin）。
+3. **至多一个活跃 Session 绑一本 data_root**（文件锁 / 409），防双写（D9 §5.5 MUST 2）。
+
+### 6.2 定制调整（复用 G3）
+
+| 前端动作 | G3 表面 | 写点 |
+|---------|--------|------|
+| 开/关某能力 | `resolve_features`+`save_features` | `config/features.yaml`（下一回合 `resolve_features` 生效） |
+| 切换导出镜头 | `switch_protagonist`+`save_protagonist_context` | `state/protagonist_runtime.yaml`（前向；演进不动） |
+| 生成/提升备选稿 | `write_alt_draft`/`promote_alt_draft` | `state/drafts/` +（提升）替稿并切镜头 |
+
+### 6.3 作者在环（沿用 D9 W3–W4）
+
+Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既有回环执行 plan→审阅→写回；`/system` 管理 LLM/工作台/联网。**若目标约束**：Web 不重写引擎；所有写口仍走 G3 白名单与 D9 白名单键，S2 行为（超时重试/检索/写回门闩）与 CLI 时代完全一致。
 
 ---
 
@@ -124,13 +142,13 @@ App Shell（D9 §5.1）
 | **G4 文档闸** | 本 SDD + D13 登记 + next-iteration 标注 + WORKLOG | ✅（2026-08-31） |
 | **G4a 后端 Read Api**（首选可交付） | `novels`/`graph`/`characters`/`outline`/`console` Read 与写口（全委托既有模块） | 单测全绿；无 LLM；多小说/单小说/控制台三类断言 |
 | **G4b 前端壳 + 图谱页** | 承接 D9 W1–W2；顶置作品索引 + 各数据图谱组件（力导/雷达/时间线/节拍条/信息视野） | 浏览器可查看多小说进度与单小说六类图谱（读 G4a） |
-| **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅 |
+| **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） |
 
 ---
 
 ## 8. 与既有设计 / 代码接线
 
-- [novel-reader-ui.md](./novel-reader-ui.md)（D9）：**IA 壳 + 栈 + 目录 + Session/`/system`** 本 SDD 直接沿用；D9 §4 中标注「远期」的「角色成长/关系」现因 G1/G2 已成，全部可落。
+- [novel-reader-ui.md](./novel-reader-ui.md)（D9）：**IA 壳 + 栈 + 目录 + Session/`/system`** 本 SDD 直接沿用；D9 §4 中标注「远期」的「角色成长/关系」现因 G1/G2 已成，全部可落；**D9 §5.5/§8.4/§10「互斥：`author_workbench.enabled=true` 时前端为唯一作者交互入口、终端静默」为本设计 §6.1 的 SSOT**。
 - [user-adjustable-and-runtime-lens.md](./user-adjustable-and-runtime-lens.md)（D12）：**G3 能力表面/镜头/备选稿 = 作者控制台三写点**，本 SDD 只做前端调用方。
 - [parallel-thread-bridging.md](./parallel-thread-bridging.md)（D10）：屏外线/并列主线视图数据源。
 - [character-growth-state-machine.md](./character-growth-state-machine.md)：成长五维 + 迁移规则（雷达/时间线数据源）。
