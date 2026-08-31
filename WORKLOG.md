@@ -7,7 +7,7 @@
 | 项 | 说明 |
 |----|------|
 | **排期 SSOT** | [`docs/planning/next-iteration.md`](./docs/planning/next-iteration.md)（**当前焦点：G1–G3 方向主轴 + W0–W5** + **产品级路线 P0–P5** + Harness **R0–R8** + **CC-b～** + **I6** + 待办）；大纲见 [`outline-mvp-plan.md`](./docs/planning/outline-mvp-plan.md)。 |
-| **近期已完成** | **2026-08-31** **G 系列三主轴全部文档 + 编码收口**：**G3 编码 ✅**（能力外观面 `capabilities.py` + 运行时镜头 `protagonist_switch.py` + 候选备选稿 `alt_draft.py`，run_novel 迁移 G1/G2 门闩统一开关 + 作者「镜头/开关/备选稿」菜单；16 条单测，全量 **375 通过 + 1 跳过**）、**G3 文档闸 · SDD D12**（用户可调收敛 + 运行时镜头（候选备选稿档）定稿，`user-adjustable-and-runtime-lens.md`）、**G2 编码 ✅**（成长站姿前馈契约/Critic + 节拍标签补足成长，8 条单测）、以及此前**全仓结构梳理 + G1 屏外线全套（数据/桥接/批处理）+ G2 文档闸**，**G2 文档闸 · SDD D11**（演进层↔叙事策略层耦闸方案定稿，`evolution-pacing-coupling.md`）、**G2 编码 ✅**（成长站姿前馈契约/Critic + 节拍标签补足成长，8 条单测）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测）、**G1b 桥接注入 ✅**（`bridging.py` + `TurnContext.bridging_snippet` + 正文 prompt 桥接块 + 回环按 `parallel_threads.enabled`/`bridge_ids` 门控注入，9 条单测，全量 **347 通过 + 1 跳过**）、**G1c 屏外批处理 ✅**（`write_off_screen_threads` + `apply_off_screen_batch`/`scan_off_screen_batch_for_all`，`trigger=batch` 幂等演进，4 条单测，全量 **351 通过 + 1 跳过**）、**G2 编码后全量 359 通过 + 1 跳过**；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
+| **近期已完成** | **2026-08-31** **G 系列三主轴全部文档 + 编码收口 + G4 文档闸**：**G4 文档闸 · SDD D13**（Novel-Data 工作台：多小说进度 ⇄ 六类数据图谱 ⇄ 作者控制台，承接 D9 壳 + G1/G2/G3 数据与表面，`novel-data-workbench.md`）、**G3 编码 ✅**（能力外观面 `capabilities.py` + 运行时镜头 `protagonist_switch.py` + 候选备选稿 `alt_draft.py`，run_novel 迁移 G1/G2 门闩统一开关 + 作者「镜头/开关/备选稿」菜单；16 条单测，全量 **375 通过 + 1 跳过**）、**G3 文档闸 · SDD D12**（用户可调收敛 + 运行时镜头（候选备选稿档）定稿，`user-adjustable-and-runtime-lens.md`）、**G2 编码 ✅**（成长站姿前馈契约/Critic + 节拍标签补足成长，8 条单测）、以及此前**全仓结构梳理 + G1 屏外线全套（数据/桥接/批处理）+ G2 文档闸**，**G2 文档闸 · SDD D11**（演进层↔叙事策略层耦闸方案定稿，`evolution-pacing-coupling.md`）、**G2 编码 ✅**（成长站姿前馈契约/Critic + 节拍标签补足成长，8 条单测）、**G1 文档闸 · SDD D10**（屏外线/并列主线方案定稿）、**G1a 编码 ✅**（`storage`/`memory_layers`/`file_sync` 增屏外线数据通道 + `character_growth.apply_off_screen_transitions` 批回放演进，9 条单测）、**G1b 桥接注入 ✅**（`bridging.py` + `TurnContext.bridging_snippet` + 正文 prompt 桥接块 + 回环按 `parallel_threads.enabled`/`bridge_ids` 门控注入，9 条单测，全量 **347 通过 + 1 跳过**）、**G1c 屏外批处理 ✅**（`write_off_screen_threads` + `apply_off_screen_batch`/`scan_off_screen_batch_for_all`，`trigger=batch` 幂等演进，4 条单测，全量 **351 通过 + 1 跳过**）、**G2 编码后全量 359 通过 + 1 跳过**；**2026-08-30** **真实 LLM 联调验证**（火山方舟 deepseek-v4-pro 下作者在环一回合全链路 E2E 通过）、**主角姓名一致性修复**与**角色独立演进：设计文档对账**、**阶段 1a/1b/2 编码 + 成长状态注入**（信息视野 + 语义关系边 + 五维迁移 + GrowthGuard + **U-6 回合内二次反应链**，全量 300 通过）、**三层记忆分层落库**（L1/L2/L3 写回+检索可开关）、**大纲 MVP-2**（progress.yaml 写回 + 作者在环节拍推进，全量 319 通过）；**2026-08-27** **Linux 迁移收口**（全量 251 通过）；**2026-06-14** **D9** **W0 文档闸**；**2026-05-01** 设定讨论链。 |
 | **当前优先** | **方向**：**多视角独立演进 ⊕ 单一主角导出** + **用户可调**（增强默认关、可开可关）。**G 系列**：**G1 屏外线/并列主线 ✅**（off-screen 演进 + 桥接摘要 + 批处理）→ **G2 演进层 ↔ 策略层耦闸 ✅**（成长/关系/视野进 PacingContract/Critic，节拍 tags 实影响成长）→ **G3 用户可调收敛 + 运行时主角切换**（D9 `/system` 可写出口，**下一步**）。**续工程**：**D9 W1→W4**、**CC-b**、**I6**、任务 E、同文导出。 |
 | **文档入口** | [`docs/README.md`](./docs/README.md)；[`SPEC_SDD.md`](./docs/framework/SPEC_SDD.md)（**D9**）；作者在环 [`author-in-loop-spec.md`](./docs/specs/author-in-loop-spec.md)；阅读 UI [`novel-reader-ui.md`](./docs/design/novel-reader-ui.md)。 |
 
@@ -138,6 +138,19 @@
 - **接线** `run_novel_with_author.py`：loop 外 `resolve_features`（一次）+ `effective_protagonist`（会话 override > 配置期，L99 改走）；`main_characters_snippet` 改由 `format_lens_snippet` 按当前镜头重建；**G1/G2 门闩迁移到 `CapabilityFlags`**（桥接→`bridging`、屏外批→`off_screen_batch`、演进耦闸→`evolution_pacing`、节拍标签→`beat_tags_to_growth`，均保留原配置块读参）；作者「🧭 镜头/开关」菜单（仅 `_flags.alt_draft` 或工作台开启时展示，默认零打扰）：`l` 换主导镜头（校验+重建提示块+持久化）、`c` 开/关能力（写 features.yaml 会话生效）、`a` 列&提升候选备选稿（提升→替稿+切镜头）。
 - **测试**：`test_capabilities.py`（6：默认全关/canonical 读/旧深层 WARN/features.yaml 覆盖优先/override 最高/序列化往返）+ `test_protagonist_switch.py`（6：配置期/override 优先/校验+持久化/非法 no-op/镜头提示块）+ `test_alt_draft.py`（5：写列/提升写 canonical+翻转/未知返 None/无 canonical_writer/空返回）。默认 `features={}` 全量回归 **375 通过 + 1 跳过**。
 - **下一步**：D9 Web `/system`（W3）落地复用本表面（`resolve_features`/`save_features`/`switch_protagonist`）。
+
+---
+
+## 2026-08-31（再续八）
+
+### G4 文档闸 · SDD D13：Novel-Data 工作台（多小说进度 ⇄ 数据图谱 ⇄ 作者控制台）
+
+- **登记**：**SPEC_SDD D13** 挂屏；`docs/design/novel-data-workbench.md` 定稿；next-iteration D9 承接项挂链。
+- **背景**：G1/G2/G3 已建六类**确定性数据面**（成长五维+迁移日志、关系语义边、信息视野、大纲进度+节拍、记忆 L1/L2/L3、屏外/并列线），D9（novel-reader-ui）只开了壳并把成长标「远期」→ 本 G4 把它们串成可直接实现的整体前端。
+- **三主线**：①**多小说进度总览**（`/novels` 索引 → 各小说 progress 摘要卡片）；②**单小说数据图谱**（`/novels/:slug`：关系全书谱/角色心图/角色对、人物五维雷达+迁移时间线、信息视野开关、记忆分层时间线、屏外线、章节节拍情志条）；③**作者控制台**（复用 G3 `parse_features`/`switch_protagonist`/`alt_draft` 三写点 + D9 Session 作者在环 + `/system`）。
+- **首切片**：**G4a 后端确定性 Read/写口 API**（`novels`/`graph`/`characters`/`outline`/`console`，全委托既有模块、无 LLM、可单测）；**G4b 前端壳+图谱页**（承接 D9 W1–W2）；**G4c 作者控制台**（写口 + W3–W4）。
+- **不动**：不重建领域模型、不重写引擎、不做整树多镜头成文（仍 G3 单导出镜头+单章备选稿）；所有视图只读/固定性，写回仅经 G3 白名单。
+- **下一步**：从 **G4a 后端 Read API** 起（可先实现、单测全绿、不破船）。
 
 ---
 

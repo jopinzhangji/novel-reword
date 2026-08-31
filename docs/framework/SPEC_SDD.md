@@ -68,6 +68,7 @@
 | D10 | [design/parallel-thread-bridging.md](../design/parallel-thread-bridging.md) | SDD | L2 | **G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3）：屏外记忆类型、按需触发、桥接注入、成长复用 |
 | D11 | [design/evolution-pacing-coupling.md](../design/evolution-pacing-coupling.md) | SDD | L2 | **G2 演进层 ↔ 叙事策略层耦闸**：成长站姿进 PacingContract/Critic（前馈）、节拍 `tags` 实影响成长（反馈），默认关 |
 | D12 | [design/user-adjustable-and-runtime-lens.md](../design/user-adjustable-and-runtime-lens.md) | SDD | L2 | **G3 用户可调收敛 + 运行时主角切换**：统一「能力开关」`runtime.features` 外观面 + CLI/D9 `/system` 出口 + 运行时镜头 `ProtagonistContext`，默认全关 |
+| D13 | [design/novel-data-workbench.md](../design/novel-data-workbench.md) | SDD | L2 | **G4 Novel-Data 工作台**：多小说进度 ⇄ 数据图谱（关系/成长/视野/记忆/屏外/节拍）⇄ 作者控制台（G3 能力/镜头/备选稿 + D9 Session），承接 D9 壳 |
 | E1 | [planning/outline-mvp-plan.md](../planning/outline-mvp-plan.md) | MVP 执行说明 | L3 | 大纲 MVP-0/1/2 范围与验收 |
 | E2 | [planning/next-iteration.md](../planning/next-iteration.md) | 迭代清单 | L3 | 进行中 / 下一步 / 已完成 |
 | O1 | [guides/usage.md](../guides/usage.md) | 手册 | L4 | 使用方式 |
