@@ -51,3 +51,33 @@ def test_characters_index_empty_when_no_roster(tmp_path):
     proj, roots = make_project(tmp_path, ("alpha",))
     (roots["alpha"] / "config" / "characters.yaml").unlink()
     assert characters.characters_index(roots["alpha"]) == []
+
+
+def test_radar_vector_levels_and_detail_field(tmp_path):
+    proj, roots = make_project(tmp_path, ("alpha",))
+    write_growth(
+        roots["alpha"], "苏A",
+        {"power_state": {"突破契机": 3, "交手经验": 3},  # Σ6 → level 1.0
+         "goal_state": {"目标重估": 1}},                 # Σ1 → level ~0.167
+        [],
+    )
+    d = characters.character_detail(roots["alpha"], "苏A")
+    rad = d["growth_radar"]
+    assert len(rad) == 5
+    by = {r["dim"]: r for r in rad}
+    assert by["power_state"]["level"] == 1.0
+    assert by["goal_state"]["level"] == round(1 / 6, 3)
+    assert by["mind_state"]["level"] == 0.0  # 无状态
+    assert by["power_state"]["label"] == "能力"
+    assert by["power_state"]["attributes"] == ["突破契机", "交手经验"]
+    assert all(0 <= r["level"] <= 1 for r in rad)
+    # 数值型 int 计入、非数值（如 str）不计入；布尔不计入
+    non_numeric = characters.radar_vector({"power_state": {"甲": 2, "乙": "x", "丙": True}})
+    p = non_numeric[0]
+    assert p["intensity"] == 2 and p["attributes"] == ["甲"]
+
+
+def test_radar_vector_empty_growth_all_zero():
+    rad = characters.radar_vector({})
+    assert [r["level"] for r in rad] == [0.0] * 5
+    assert all(r["attributes"] == [] for r in rad)

@@ -82,8 +82,45 @@ def character_view(novel_root: Path, character_id: str) -> dict:
     }
 
 
+_DIM_LABELS = {
+    "power_state": "能力",
+    "mind_state": "心理",
+    "social_state": "关系",
+    "goal_state": "目标",
+    "resource_state": "资源",
+}
+# 单维「深」的成长量基准：level = min(1.0, Σ(子状态值) / scale)。可调；见 D13 §6.6 #2。
+_GROWTH_DEPTH_SCALE = 6.0
+
+
+def radar_vector(growth: dict) -> list[dict]:
+    """五维成长深度雷达向量（确定性，无 LLM）。
+
+    每维 `intensity = Σ(数值型子状态值)`，`level = min(1, intensity / scale)`（0..1，
+    四舍五入 3 位）。语义为「成长深度」（无状态=0、多个成熟子状态=1），**非绝对特质分**。
+    返回 5 项 `{dim, label, level, intensity, attributes}`（缺失维给空 attributes、0）。
+    """
+    out: list[dict] = []
+    for key in ("power_state", "mind_state", "social_state", "goal_state", "resource_state"):
+        d = growth.get(key) if isinstance(growth, dict) else None
+        d = d if isinstance(d, dict) else {}
+        numeric = {k: v for k, v in d.items()
+                   if isinstance(v, (int, float)) and not isinstance(v, bool)}
+        intensity = float(sum(numeric.values()))
+        out.append(
+            {
+                "dim": key,
+                "label": _DIM_LABELS[key],
+                "level": round(min(1.0, intensity / _GROWTH_DEPTH_SCALE), 3),
+                "intensity": intensity,
+                "attributes": list(numeric),
+            }
+        )
+    return out
+
+
 def character_detail(novel_root: Path, character_id: str) -> dict:
-    """单人物完整卡：五维成长 + 视野 + L1 记忆 + 屏外线 + 运行期态标注。"""
+    """单人物完整卡：五维成长 + 雷达 + 视野 + L1 记忆 + 屏外线 + 运行期态标注。"""
     cid = str(character_id)
     state = load_growth_state(cid, novel_root)
     growth = {
@@ -97,6 +134,7 @@ def character_detail(novel_root: Path, character_id: str) -> dict:
     return {
         "id": cid,
         "growth": growth,
+        "growth_radar": radar_vector(growth),
         "view": character_view(novel_root, cid),
         "memories_l1": character_events_on_disk(novel_root, cid),
         "off_screen_threads": load_off_screen_threads(novel_root, cid),

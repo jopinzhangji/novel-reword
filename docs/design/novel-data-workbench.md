@@ -175,6 +175,18 @@ auth:
 - **可配监听**：`python -m web.api.server` 读 `server.host/port` 直接 `uvicorn.run`（免手敲 `--host`）。默认仍 127.0.0.1；本机自用无需改。
 - **⚠ 暴露边界（诚实标注）**：app **无 OAuth/CORS 层**，若 `auth.enabled=false` 且 `host=0.0.0.0` = 全写口裸奔。`enabled=true` 的 Basic Auth 密码为**服务器明文共享口令**，只适合单作者局域网/反代后自用，**不建议直接对公网**；公网暴露请前置 nginx/caddy 反代 + 更强认证，或用 ssh 隧道（`ssh -L 8000:127.0.0.1:8000 用户@主机`）零暴露写口。
 
+### 6.6 工作台面板补全（GG-W，2026-08-31 起，逐项 #2-#5）
+
+数据源全部复用 §4/§6 既有确定性模块，纯前端渲染 + 必要薄读口，**default 不破**（船身不破）。**#2 五维成长雷达图 ✅（2026-08-31）**，继续 #3。
+
+**#2 五维成长雷达图**：
+- **数据源**：`character_detail.growth` 五维 `power/mind/social/goal/resource` 均为 `dict[str,int]`（子状态计数，cap≈3–5）。
+- **确定性打分口径（新增后端 `growth_radar`，进 `character_detail`）**：对每维 `intensity = Σ(子状态值)`，`level = min(1.0, intensity / 6)`（**成长深度 0..1**，四舍五入 3 位）。语义为「成长深度」**非绝对特质分**（诚实标注：无状态=0、多个成熟子状态=1）；`GROWTH_DEPTH_SCALE=6` 为可调常量。返回 5 项 `{dim,label,level,intensity,attributes}`。
+- **前端**：人物卡内嵌迷你 SVG 雷达（5 顶点多边形 + 网格 + 维度标签 + level 数值），依据 `d.growth_radar`。
+- **验收**：`GET /api/novels/{slug}/characters/{id}` 返回 `growth_radar` 5 项、每项 `0≤level≤1`；空成长全 0；无 LLM；全量回归保持绿。
+
+**#3 迁移日志时间线 / #4 L1记忆·屏外线时间线 / #5 跨卡联动**：见 next-iteration「待办·工作台面板补全」，均在数据就绪前提下纯前端展开。
+
 ---
 
 ## 7. 分阶段落地
@@ -187,6 +199,7 @@ auth:
 | **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） ✅（2026-08-31：`WebInputAdapter`/`LogOnlyAuthorIngress` + `WorkbenchSession`/`SessionRegistry` + `session.py` router（409 互斥 + pending/reply/abort/delete）；11 条单测，全量 **416 通过 + 1 跳过**） |
 | **GG5 `/system` 系统设置** | D9 §5.6 LLM（只读）/工作台互斥（可写）/联网（可写）面板 | 浏览器内读 effective 设置、改 `author_workbench.enabled` + `internet_search.*` 落 per-novel `config/runtime.yaml`；get_post_set_state；LLM 只读不破启动链；全量回归保持绿 ✅（2026-08-31：详见 §6.4） |
 | **GG6 远程访问与鉴权** | 可配监听（`config/web_api.yaml` server.host/port）+ 密码登录（Basic Auth，可开关） | `python -m web.api.server` 按配置监听；`auth.enabled=true` 全站 Basic Auth（默认关不破本地/单测）；空口令启动报错不裸奔；口令恒等比较；全量回归保持绿 ✅（2026-08-31：详见 §6.5） |
+| **GG-W 工作台面板补全** | #2 五维成长雷达（`growth_radar` 确定性打分 + 前端 SVG 雷达）→ #3 迁移日志时间线 → #4 L1记忆·屏外线时间线 → #5 跨卡联动 | 数据源复用 §4 确定性模块、纯前端渲染；default 不破；全量回归保持绿。**#2 ✅（2026-08-31：`character_detail` 增 `growth_radar`，`_GROWTH_DEPTH_SCALE=6` 截断，前端人物卡内嵌雷达；详见 §6.6）** |
 
 ---
 
