@@ -110,8 +110,19 @@
 |------|--------|----------|
 | **CC-a** | 本文进入登记表 **D8**；与 D6、D2、next-iteration 互链 | 评审通过 |
 | **CC-b** | `CompressionContract` 数据结构 + 规则/原型生成器（无或可选 LLM） | 单元测试：多意图下契约字段合理；兜底路径 |
-| **CC-c** | 组装后钩子 + 门限；分块压缩提示模板 | 集成测试：超阈触发、输出仍含分块/来源 |
+| **CC-c** | 组装后钩子 + 门限 + **确定性结构保留压缩**（用户 2026-08-31 定策；LLM 抽取式提示留给 CC-d） | 集成测试：超阈触发、输出仍含分块/来源 ✅（2026-08-31，见 §6.1） |
 | **CC-d** | （可选）接入 **LLMLingua** 或第二路「抽取式」压缩作 A/B | 配置开关；默认不改变无阈行为 |
+
+### 6.1 CC-c 落地记录（2026-08-31，确定性结构保留压缩）
+
+- **定策**：压缩实现选**确定性结构保留**（与 CC-b 一致、DummyLLM guard 不破/default 不破），不引入检索热路径 LLM 调用；原文「分块压缩提示模板」中的 LLM 抽取向**移至 CC-d**（可选 A/B，配置开关、默认不变）。
+- **新增（挂载到设计讨论检索组装）**：
+  - `context_compression.reduce_snippet_structure_preserved(text, max_chars)`：**结构保留**削减——保留首个结构化标题行（`#`/`**`/编号/`【`）作锚点 + 逐行装入正文行，绝不压成单段结论文，末尾打节流标记。
+  - `retrieve_for_intent.compress_retrieval_snippets(snippets, cap, contract, settings)`：**门限触发**——`Σlen ≥ threshold_ratio × cap`（默认 **0.75**）且 `context_compress.enabled` 才压缩，逐块结构保留削减至 **target_ratio × cap**（默认 **0.5**，滞回），来源标签仍由 assembler 保留 → 输出**仍分块/分节带【来源】**；未超阈或未启用 → 原样返回（**无阈行为不变**）。
+  - `retrieve_for_intent.load_compress_settings(runtime_config)`：`runtime.author_interaction.context_compress` `{enabled:false, threshold_ratio:0.75, target_ratio:0.5}` 默认禁（用户可调开）；per-novel `config/runtime.yaml` 覆盖。
+  - 挂载点：`design_phase._assembled_context_for_discussion`（设定自由讨论检索组装；phase/intent/user_input/confidence 皆在，可建契约）——`build_compression_contract` → 超阈则 `compress_retrieval_snippets` → 再 assemble。主篇检索路径（`cli.py`/`turn_planning`）挂载留后续。
+- **可观测**（§5）：触发时 `logger.info` 记 `is_compressed` + before/after chars + 契约摘要（`contract_summary`）。
+- **测试**：单测 `reduce_snippet_structure_preserved`（保留标题骨架、不塌成单段、≤max）+ `compress_retrieval_snippets`（未超阈/未启用原样、超阈启用削减至 ≤target 且仍带【来源】）+ `load_compress_settings` 默认。全量保持绿。
 
 **排期 SSOT**：[planning/next-iteration.md](../planning/next-iteration.md) **待办** 与 **当前焦点**。
 
@@ -129,3 +140,4 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-03-29 | 初稿：自适应分层任务锚定压缩、Compression Contract、软原型、挂载点、分阶段落地；登记为 **D8**。 |
+| 2026-08-31 | CC-c 落地：确定性结构保留压缩（门限 0.75 / 滞回 0.5 / 默认关；`reduce_snippet_structure_preserved` + `compress_retrieval_snippets` + `load_compress_settings`），挂载设计讨论检索组装；LLM 抽取向移 CC-d。 |

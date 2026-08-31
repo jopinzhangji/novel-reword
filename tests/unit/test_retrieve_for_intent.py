@@ -17,10 +17,67 @@ from src.author_harness.retrieval_registry import (
 from src.author_harness.prompt_assembler import assemble_retrieval_prompt_block
 from src.author_loop.retrieve_for_intent import (
     RETRIEVAL_PROFILE_DESIGN_DISCUSSION,
+    RetrievalSnippet,
+    compress_retrieval_snippets,
     format_snippets_for_prompt,
+    load_compress_settings,
     retrieve_for_intent,
     retrieve_max_total_chars,
 )
+
+
+# --- CC-c：契约驱动确定性结构保留压缩（SDD D8 §6.1） ---
+def _snippets_small():
+    return [
+        RetrievalSnippet("world.yaml",
+                         "## 世界设定\n一个很长的世界背景描述会一直延续直到超过阈值触发压缩它要占不少字符好让总量超限被裁剪\n* 特性甲 内容\n* 特性乙 内容"),
+        RetrievalSnippet("book/setting#摘要",
+                         "## 关键要点\n第二块内容也比较长用来确保总长超阈并验证多块各自被结构保留裁剪兼顾来源标签拿捏到位"),
+        RetrievalSnippet("internet/todo", "## 外网摘要\n第三块较短的摘录"),
+    ]
+
+
+def _on_settings(proj: dict | None = None) -> dict:
+    cc = proj or {}
+    return {"runtime": {"author_interaction": {"context_compress": {"enabled": True, **cc}}}}
+
+
+def test_compress_enabled_over_threshold_reduces_and_keeps_chunks():
+    snips = _snippets_small()
+    settings = load_compress_settings(_on_settings({"threshold_ratio": 0.75, "target_ratio": 0.5}))
+    cap = 60
+    contract = None
+    out = compress_retrieval_snippets(snips, cap, contract=contract, settings=settings)
+    # 语料总量 150 > 0.75×60=45 → 触发；压到 ≤ 0.5×60=30（硬保险后亦 ≤cap）
+    assert sum(len(s.text) for s in out) <= cap
+    # 仍分块、来源标签保留
+    assert len(out) == 3
+    assert [s.source for s in out] == ["world.yaml", "book/setting#摘要", "internet/todo"]
+    # 每块都保留标题骨架（非单段结论）
+    assert out[0].text.startswith("## 世界设定")
+    assert out[1].text.startswith("## 关键要点")
+    assert out[0].truncated and out[1].truncated
+
+
+def test_compress_disabled_is_identity():
+    snips = _snippets_small()
+    settings = load_compress_settings({})  # enabled 默认 false
+    out = compress_retrieval_snippets(snips, 60, contract=None, settings=settings)
+    assert out is snips
+
+
+def test_compress_under_threshold_is_identity_even_enabled():
+    snips = _snippets_small()
+    settings = load_compress_settings(_on_settings())
+    out = compress_retrieval_snippets(snips, 10000, contract=None, settings=settings)
+    assert out == snips  # 未超阈：无阈行为不变
+
+
+def test_load_compress_settings_defaults_and_override():
+    d = load_compress_settings({})
+    assert d == {"enabled": False, "threshold_ratio": 0.75, "target_ratio": 0.5}
+    o = load_compress_settings(_on_settings({"threshold_ratio": 0.6, "target_ratio": 0.4}))
+    assert o["enabled"] is True and o["threshold_ratio"] == 0.6 and o["target_ratio"] == 0.4
 
 
 def _bind_novel(config_dir: Path) -> Path:

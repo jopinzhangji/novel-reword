@@ -32,9 +32,14 @@ from src.author_loop.author_session import AuthorSession
 from src.author_harness.author_harness import apply_design_main_menu_ingress
 from src.author_loop.classify_intent import classify_intent, looks_like_menu_freeform_design_input
 from src.author_harness.prompt_assembler import assemble_retrieval_prompt_block
+from src.author_loop.classify_intent import INTENT_DESIGN_COMPLETE, INTENT_FALLBACK
+from src.author_loop.context_compression import build_compression_contract
 from src.author_loop.retrieve_for_intent import (
     RETRIEVAL_PROFILE_DESIGN_DISCUSSION,
+    compress_retrieval_snippets,
+    load_compress_settings,
     retrieve_for_intent,
+    retrieve_max_total_chars,
 )
 from src.author_loop.design_session_persistence import (
     add_setting_direction,
@@ -510,7 +515,10 @@ def _assembled_context_for_discussion(
     config_dir: Path,
     runtime_config: dict,
 ) -> str:
-    """R5：自由讨论每轮 classify → retrieve → assemble；结果注入 discuss_freely，并写入 session.extra 便于日志/单测。"""
+    """R5：自由讨论每轮 classify → retrieve → assemble；结果注入 discuss_freely，并写入 session.extra 便于日志/单测。
+
+    CC-c（D8 §6.1）：超阈且启用时，契约驱动确定性结构保留压缩检索块（来源标签仍由 assembler 保留）。
+    """
     _cl = classify_intent(
         author_message,
         session.phase_state,
@@ -528,6 +536,20 @@ def _assembled_context_for_discussion(
         internet_query=_cl.internet_query or None,
         retrieval_profile=RETRIEVAL_PROFILE_DESIGN_DISCUSSION,
     )
+    if _cl.intent_id not in (INTENT_DESIGN_COMPLETE, INTENT_FALLBACK):
+        contract = build_compression_contract(
+            phase="DESIGN_DISCUSSION",
+            intent_id=_cl.intent_id,
+            user_input=author_message,
+            retrieval_query=_cl.retrieval_query or author_message,
+            confidence=_cl.confidence,
+        )
+        _snippets = compress_retrieval_snippets(
+            _snippets,
+            retrieve_max_total_chars(runtime_config),
+            contract=contract,
+            settings=load_compress_settings(runtime_config),
+        )
     block = assemble_retrieval_prompt_block(_snippets, layout="design_discussion")
     session.extra["intent_retrieval"] = block
     session.extra["intent_retrieval_snippets"] = _snippets

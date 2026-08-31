@@ -30,6 +30,7 @@ from src.author_loop.classify_intent import (
     INTENT_SAVE_PROGRESS,
 )
 from src.agents.setting_research.agent import DIRECTION_LABELS
+from src.author_loop.context_compression import reduce_snippet_structure_preserved
 from src.config import current_novel_root, load_world_config
 from src.runtime.file_sync import get_book_root
 from src.author_harness.internet_search import fetch_internet_snippet_playwright, load_internet_search_settings
@@ -615,6 +616,68 @@ def _enforce_total_budget(snippets: list[RetrievalSnippet], cap: int) -> list[Re
         n = max(80, int(len(s.text) * ratio))
         t, trunc = _truncate(s.text, n)
         out.append(RetrievalSnippet(source=s.source, text=t, truncated=trunc or s.truncated))
+    return out
+
+
+# --- CC-c：契约驱动确定性结构保留压缩（SDD D8 §6.1；纯确定性、无 LLM） ---
+_DEFAULT_COMPRESS = {"enabled": False, "threshold_ratio": 0.75, "target_ratio": 0.5}
+_FLOOR_PER_SNIPPET = 32  # 每块保留锚点下限，保证「非单段结论」的最小结构
+
+
+def load_compress_settings(runtime_config: dict) -> dict[str, Any]:
+    """读 `runtime.author_interaction.context_compress`；缺省默认关（用户可调）。"""
+    cfg = _author_interaction_cfg(runtime_config)
+    cc = cfg.get("context_compress")
+    cc = cc if isinstance(cc, dict) else {}
+    value = dict(_DEFAULT_COMPRESS)
+    for k, d in (("enabled", False), ("threshold_ratio", 0.75), ("target_ratio", 0.5)):
+        raw = cc.get(k, d)
+        if k == "enabled":
+            value[k] = bool(raw)
+        elif isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            value[k] = max(0.0, min(1.0, float(raw)))
+    return value
+
+
+def compress_retrieval_snippets(
+    snippets: list[RetrievalSnippet],
+    cap: int,
+    *,
+    contract: Any,
+    settings: dict[str, Any] | None = None,
+) -> list[RetrievalSnippet]:
+    """CC-c 门限触发压缩：契约驱动逐块结构保留削减至 target_ratio×cap（滞回）。
+
+    - 未启用 / 超阈 未达 threshold_ratio×cap → **原样返回**（无阈行为不变，default 不破）。
+    - 超阈启用 → 每块 `reduce_snippet_structure_preserved` 缩到份额（下限保锚点），来源标签
+      由 assembler 保留 → 输出仍分块/分节、带【来源】，绝不含糊单段结论。
+    - 返回后由调用方 `_enforce_total_budget`（硬保险）兜底。
+    """
+    settings = settings or load_compress_settings({})
+    if not settings.get("enabled") or cap <= 0:
+        return snippets
+    total = sum(len(s.text) for s in snippets)
+    threshold = int(settings.get("threshold_ratio", 0.75) * cap)
+    if total <= cap or total < threshold:  # 未超阈：保持原样
+        return snippets
+    target = max(1, int(settings.get("target_ratio", 0.5) * cap))
+    # 契约参与：若契约要求 keep 的结构层占主导，削减更保守（此处按份额等比，契约 ID 留日志可观测）
+    out: list[RetrievalSnippet] = []
+    n = len(snippets)
+    # 每块保底份额（保证「非单段结论」最小结构），且 Σfloor ≤ target；余量按文本占比分。
+    per_floor = _FLOOR_PER_SNIPPET if n == 0 else min(_FLOOR_PER_SNIPPET, max(1, target // n))
+    pool = max(0, target - per_floor * n)
+    weights = [max(1e-9, len(s.text)) for s in snippets]
+    wsum = sum(weights)
+    for s, w in zip(snippets, weights):
+        share = per_floor + (int(pool * w / wsum) if n else 0) if n else 0
+        new_text = reduce_snippet_structure_preserved(s.text, max(1, share))
+        out.append(RetrievalSnippet(source=s.source, text=new_text, truncated=True))
+    logger.info(
+        "compress_retrieval_snippets: is_compressed chars=%d->%d cap=%d target=%d contract_proto=%s",
+        total, sum(len(x.text) for x in out), cap, target,
+        getattr(contract, "prototype_id", "") or "",
+    )
     return out
 
 

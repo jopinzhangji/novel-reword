@@ -16,10 +16,12 @@ SDD ``docs/design/context-compression-adaptive-layered.md``（SPEC_SDD **D8**）
 （输入长度、分类置信度）生成；**置信度低 / 无法归类**时退化为「**最小安全集**」兜底
 （任务句 + 作者原句(或截断) + 来源标签骨架 + 少量事实锚点）。
 
-CC-c 未落地前，本模块仅被单测消费；出口 ``to_dict`` 供 §5 可观测日志使用。
+CC-c（2026-08-31）落地确定性结构保留削减 ``reduce_snippet_structure_preserved`` 并挂载设计讨论
+检索组装（见 ``retrieve_for_intent.compress_retrieval_snippets`` / ``design_phase``）。
 """
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -284,3 +286,47 @@ def contract_summary(contract: CompressionContract) -> dict[str, str]:
         "sacrifice_order": "/".join(contract.sacrifice_order),
         "query_focus": contract.query_focus,
     }
+
+
+# --- CC-c：确定性结构保留压缩（2026-08-31；SDD D8 §6.1） ---
+# 门限触发、逐块结构保留削减，绝不压成单段结论；来源标签由 assembler 保留。
+
+# 结构化标题行锚点：Markdown 标题 / 加粗小标题 / 编号项 / 作者记忆【…】标签 / 缩进条目。
+_HEADING_RE = re.compile(r"^(#{1,6}\s|\*\*|[-*]\s+\*\*|\d+[.)]\s|【)")
+_CLIP_TAIL_MARK = "\n…（已压缩）"
+
+
+def reduce_snippet_structure_preserved(text: str, max_chars: int) -> str:
+    """结构保留削减一块文本至 `max_chars`（确定性、无 LLM）。
+
+    保留首个结构化标题行（`#`/`**`/编号/`【`）作锚点 + 逐行装入正文行；不低于可读锚点下限，
+    结尾打节流标记。**禁止**把整块塌成单段结论文 —— 输出始终分节、可辨来源。
+    契约的 layer_roles 用作文本是否可裁的提示（调用方裁剪范围由份额决定），此处保证表观结构。
+    """
+    t = (text or "").strip()
+    if len(t) <= max_chars:
+        return t
+    if max_chars < 1:
+        return ""
+    lines = t.split("\n")
+    # 锚点：首个结构化标题行，否则首个非空内容行
+    anchor = next((ln for ln in lines if _HEADING_RE.match(ln)), next((ln for ln in lines if ln.strip()), ""))
+    if len(anchor) > max_chars:
+        # 极小额：连标题都放不下时也截锚点（来源标签仍由 assembler 保留），绝不让整块留在原长度
+        return anchor[: max_chars - 1] + "…"
+    out = anchor
+    budget = max_chars - len(anchor)
+    dropped = False
+    for ln in lines[1:]:
+        if not ln.strip():
+            continue
+        if budget - len(ln) < 0:
+            dropped = True
+            break
+        out += "\n" + ln
+        budget -= len(ln)
+    # 有正文行被丢弃（入口保证 len(t) > max_chars，故必有丢弃）→ 打节流标记，标识非完整
+    # （不牺牲来源/结构，输出仍分节、可辨来源，绝不含糊为单段结论）。
+    if dropped or budget < 0:
+        out += _CLIP_TAIL_MARK
+    return out[:max_chars] if len(out) > max_chars else out

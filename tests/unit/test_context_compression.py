@@ -19,6 +19,7 @@ from src.author_loop.context_compression import (
     SHORTEN,
     build_compression_contract,
     contract_summary,
+    reduce_snippet_structure_preserved,
 )
 
 
@@ -166,3 +167,34 @@ def test_to_dict_and_summary_round_trip():
     s = contract_summary(c)
     assert s["prototype"] == c.prototype_id and s["query_focus"] == "主角 动作"
     assert "作者原句" in s["layer_roles"] or "待检正文" in s["layer_roles"]
+
+
+# --- CC-c：确定性结构保留压缩（SDD D8 §6.1） ---
+def test_reduce_keeps_heading_and_never_single_paragraph():
+    text = "## 世界设定\n第一行相当长刻画细节要尽量保留结构避免被塌成一句话结束整个模块\n* 特性甲 内容\n* 特性乙 内容"
+    out = reduce_snippet_structure_preserved(text, 40)
+    assert len(out) <= 40
+    assert out.startswith("## 世界设定")      # 标题骨架保留
+    assert "\n" in out or "…" in out           # 仍分节或带节流标记
+    # 第二行也被截入（20 字内放得下部分）——不塌成「来源+单行结论」
+    assert out.count("\n") >= 1
+    assert out not in ("## 世界设定\n…", "## 世界设定")
+
+
+def test_reduce_tiny_budget_truncates_anchor():
+    # 连标题都放不下：也截锚点，绝不让整块留在原长度（哪怕来源标签由 assembler 保留）
+    out = reduce_snippet_structure_preserved("## 世界设定\n很多很长的内容行安放这里", 5)
+    assert len(out) <= 5
+
+
+def test_reduce_noop_when_fits():
+    text = "够短\n第二行"
+    assert reduce_snippet_structure_preserved(text, 200) == text
+    assert reduce_snippet_structure_preserved(text, 0) == ""
+
+
+def test_reduce_clips_body_not_heading():
+    text = "正文首行开头\nbullet 甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉"
+    out = reduce_snippet_structure_preserved(text, 12)
+    assert len(out) <= 12
+    assert not text.startswith(out) and len(out) < len(text)  # 确实被剪短
