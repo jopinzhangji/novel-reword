@@ -251,6 +251,7 @@
 - **暴露边界（诚实）**：app 无 OAuth/CORS 层；Basic Auth 为服务器明文共享口令，只适合单作者局域网/反代后自用，**不建议直接对公网**；公网请反代 + 更强认证或 `ssh -L` 隧道零暴露写口。
 - **测试**：`test_web_security.py`（importorskip）——`verify_credentials` 正/误/关、`load_web_settings` 默认/override、TestClient 启用鉴权后 401/200 + 静态也拦截、默认关不破既有。全量回归保持绿。
 - **下一步**：面板 #2-#5；或按需把 Basic Auth 升级为 nginx 反代/OAuth 供公网长期暴露。
+- **定策补录（2026-08-31，用户确认自用）**：工作台主要**自用**，安全整体后置（Basic Auth 已够单作者局域网/反代后自用）；「安全强化」记为后期任务（反代+OAuth、HTTPS/TLS、口令存储最小化、会话/限流、CORS 白名单），已列入 next-iteration 待办「远程访问安全强化」，近期不立项、不阻塞功能主线。
 
 ---
 
