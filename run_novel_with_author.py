@@ -7,6 +7,7 @@ main() 支持可选参数 input_fn（与 AuthorSession 一致），供测试或�
 """
 import logging
 import os
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -49,6 +50,7 @@ from src.runtime.outline_store import (
     save_progress,
 )
 from src.runtime.protagonist import format_main_characters_snippet, resolve_protagonist_id
+from src.runtime.protagonist_switch import format_lens_snippet
 
 
 def main(input_fn: Callable[[str], str] | None = None) -> None:
@@ -96,7 +98,24 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
 
     log.info("开局场景: scope_id=%s, time=%s, place=%s", scope_id, time_str, place)
     log.info("在场角色: %s", present)
-    _prot_id, _prot_name = resolve_protagonist_id(runtime, orch.characters_config)
+    # G3 运行时镜头：会话内 override（state/protagonist_runtime.yaml）> 配置期主角；默认无 override → 等价旧版。
+    try:
+        from src.runtime.capabilities import resolve_features, save_features
+        from src.runtime.protagonist_switch import (
+            ProtagonistContext,
+            effective_protagonist,
+            load_protagonist_context,
+            save_protagonist_context,
+        )
+        _g3_dr0 = runtime_file_sync.get_data_root(PROJECT_ROOT, runtime)
+        _prot_ctx = load_protagonist_context(_g3_dr0) if _g3_dr0 else ProtagonistContext()
+        _prot_id, _prot_name = effective_protagonist(runtime, orch.characters_config, _prot_ctx)
+        _features_flags = resolve_features(runtime, data_root=_g3_dr0)
+    except Exception as _g3e:
+        _prot_ctx = ProtagonistContext()
+        _prot_id, _prot_name = resolve_protagonist_id(runtime, orch.characters_config)
+        _features_flags = None
+        log.warning("运行时镜头/能力外观面初始化失败（按配置期与默认回退）: %s", _g3e)
     if _prot_id:
         log.info("[叙事主角] %s（id=%s）", _prot_name, _prot_id)
 
@@ -266,19 +285,33 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
         )
 
     last_summary = ""
-    main_characters_snippet = format_main_characters_snippet(runtime, orch.characters_config)
+    # G3：主角与主要角色提示块按**当前镜头**重建（默认 = 配置期，等价旧版）；换镜头后同一函数跟 _prot_id/_prot_name。
+    def _rebuild_prot_snippet() -> str:
+        return format_lens_snippet(_prot_id, _prot_name, orch.characters_config)
+
+    def _write_g3_canonical(dr: Path, chapter_id: str, body: str) -> Path:
+        """把已提升的备选稿正文落为 canonical 成文副本（不覆盖实时 turn 文件）。"""
+        _safe = re.sub(r"[^A-Za-z0-9_.\-]+", "_", chapter_id or "ch")
+        _cp = Path(dr) / "book" / "content" / "drafts" / f"{_safe}.md"
+        _cp.parent.mkdir(parents=True, exist_ok=True)
+        _cp.write_text(f"# {chapter_id}\n\n{body or ''}", encoding="utf-8")
+        return _cp
+
+    main_characters_snippet = _rebuild_prot_snippet()
     if main_characters_snippet:
-        log.debug("[主角注入] 已生成主角与主要角色提示块")
+        log.debug("[主角注入] 已生成主角与主要角色提示块（镜头=%s）", _prot_name)
     _outline_warned = False  # Opt-6：首损 WARN 一次、连续失败才降级 debug
-    # G1 屏外线：读取并行线程配置（默认关）。桥接注入(bridge)与批处理(batch)共用同一配置块。
+    # G3 能力外观面：统一开关。默认无 features → 逐字段回退旧深层位置（与旧行为逐字节等价）。
+    _flags = _features_flags if _features_flags is not None else resolve_features(runtime, data_root=None)
+    # G1 屏外线：保留 parallel_threads 配置块读参（trigger/batch_turns/bridge_ids），enable 统一走 _flags。
     pt_cfg = runtime.get("parallel_threads") or {}
     if not pt_cfg:
         pt_cfg = (runtime.get("runtime") or {}).get("parallel_threads") or {}
-    # G2 演进层↔叙事策略层：读取耦闸配置（默认关）。开启才把成长站姿前馈给契约/Critic。
+    # G2 演进层↔叙事策略层：保留 evolution_pacing 配置块读参，enable 统一走 _flags。
     _evo_cfg = runtime.get("evolution_pacing") or {}
     if not _evo_cfg:
         _evo_cfg = (runtime.get("runtime") or {}).get("evolution_pacing") or {}
-    _evo_enabled = bool(_evo_cfg.get("enabled", False))
+    _evo_enabled = bool(_flags.evolution_pacing)
     for turn in range(n):
         log.info("===== 回合 %s/%s =====", turn + 1, n)
         outline_snippet = ""
@@ -405,9 +438,9 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             world_config=orch.world_config,
             last_turn_summary=last_summary,
         )
-        # G1c 批处理触发：仅当 parallel_threads.enabled && trigger=="batch" 时，每 batch_turns 回合
+        # G1c 批处理触发：仅当能力开关 off_screen_batch && trigger=="batch" 时，每 batch_turns 回合
         # 扫一次各关键角色已累积未消费的屏外条目（无新戏自动空转，幂等）。默认关 → 不触发。
-        if pt_cfg and bool(pt_cfg.get("enabled", False)) and pt_cfg.get("trigger") == "batch":
+        if pt_cfg and bool(_flags.off_screen_batch) and pt_cfg.get("trigger") == "batch":
             _batch_turns = int(pt_cfg.get("batch_turns", 5) or 5)
             if _batch_turns > 0 and (turn + 1) % _batch_turns == 0:
                 try:
@@ -451,10 +484,10 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             except Exception as _ge:
                 growth_standings = None
                 log.warning("加载成长站姿失败（忽略）: %s", _ge)
-        # G1b 桥接：仅当 runtime.parallel_threads.enabled=true 且配置了 bridge_ids 时才注入屏外结果摘要。
+        # G1b 桥接：仅当能力开关 bridging 开启 且配置了 bridge_ids 时才注入屏外结果摘要。
         # 默认关闭（false/无配置）→ 空串，不改变主书正文行为。
         bridging_snippet = ""
-        if pt_cfg and bool(pt_cfg.get("enabled", False)):
+        if pt_cfg and bool(_flags.bridging):
             try:
                 from src.retrieval.bridging import build_bridging_snippet_from_storage
                 bridging_snippet = build_bridging_snippet_from_storage(
@@ -555,7 +588,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             # 若重试后仍驳回，则直接跳过本回合进入下一回合。
             if not approved or result_phase1 is None:
                 continue
-        _beat_tags_to_growth = bool(_evo_cfg.get("beat_tags_to_growth", False)) if _evo_enabled else False
+        _beat_tags_to_growth = bool(_flags.beat_tags_to_growth)
         orch.apply_event_and_state_write(
             result_phase1,
             scope_id,
@@ -612,6 +645,84 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
                 log.info("[大纲] 作者选择跳过，改由手改 YAML。")
             else:
                 log.info("[大纲] 仅计入本回合数（仍停留 %s/%s）。", _p.get("chapter_id"), _p.get("beat_id"))
+        # G3 镜头/开关：仅当备选稿能力或工作台开启时展示（默认关 → 零打扰）。显式操作，无静默跳章。
+        _g3_show = bool(_flags.alt_draft) or bool(
+            ((runtime.get("runtime") or {}).get("author_workbench") or {}).get("enabled", False)
+        )
+        if _g3_show:
+            _g3_ch = (outline_beat.chapter_id if outline_beat and outline_beat.chapter_id else f"turn{turn}")
+            _g3_ans = author_session.read_line(
+                f"\n[G3 镜头/开关：当前章 {_g3_ch}，镜头={_prot_name}]"
+                "（l 换主导镜头, a 候选备选稿, c 开关能力, 回车 继续）: "
+            ).strip().lower()
+            if _g3_ans == "l":
+                _opts = [
+                    str(c.get("id")) for c in (orch.characters_config or {}).get("characters", [])
+                    if isinstance(c, dict) and c.get("id")
+                ]
+                if not _opts:
+                    log.info("[G3] 无可用角色可切换镜头。")
+                else:
+                    log.info("[G3] 可选镜头角色: %s（输入 id）", "、".join(_opts))
+                    _target = author_session.read_line("切换导出镜头到（角色 id）: ").strip()
+                    if _target:
+                        from src.runtime.protagonist_switch import switch_protagonist
+                        _changed = switch_protagonist(_prot_ctx, runtime, orch.characters_config, _target)
+                        if _changed and _changed[0] == _target:
+                            _prot_id, _prot_name = _changed
+                            main_characters_snippet = _rebuild_prot_snippet()
+                            save_protagonist_context(_g3_dr0, _prot_ctx) if _g3_dr0 else None
+                            log.info("[G3] 导出镜头已切换：%s（%s）。后续回合按新镜头成文。", _prot_name, _prot_id)
+                        else:
+                            log.info("[G3] 镜头未切换（目标不在可用列表）。")
+                    else:
+                        log.info("[G3] 未输入镜头目标，保持 %s。", _prot_name)
+            elif _g3_ans == "c":
+                _cap = author_session.read_line(
+                    "开关能力（输入 能力名;on|off，如 evolution_pacing;on，回车 返回）: "
+                ).strip()
+                if _cap and ";" in _cap:
+                    _n, _v = _cap.split(";", 1)
+                    _n = _n.strip()
+                    _v = _v.strip().lower() in ("on", "true", "1", "yes", "开")
+                    _ov = _flags.to_dict()
+                    _ov[_n] = _v
+                    _flags = resolve_features(runtime, features_override=_ov, data_root=_g3_dr0)
+                    save_features(_g3_dr0, {_n: _v}) if _g3_dr0 else None
+                    log.info("[G3] 能力开关 %s → %s（会话内已生效；已写入 features.yaml）", _n, _v)
+                else:
+                    log.info("[G3] 未改动能力开关。")
+            elif _g3_ans == "a":
+                from src.runtime.alt_draft import list_alt_drafts, promote_alt_draft
+                _drafts = list_alt_drafts(_g3_dr0, _g3_ch) if _g3_dr0 else []
+                _draftable = [d for d in _drafts if d.status == "draft"]
+                if not _draftable:
+                    log.info("[G3] 本章无待提升的候选备选稿（本章已有 %s 条）。", len(_drafts))
+                else:
+                    _nm = "、".join(d.lens_id for d in _draftable)
+                    _pick = author_session.read_line(f"可提升备选稿 lens: {_nm}（输入 lens 提升，回车 返回）: ").strip()
+                    if _pick:
+                        _hit = next((d for d in _draftable if d.lens_id == _pick), None)
+                        if _hit is None:
+                            log.info("[G3] 无 lens=%s 的备选稿。", _pick)
+                        else:
+                            _res = promote_alt_draft(
+                                _g3_dr0, _g3_ch, _pick,
+                                canonical_writer=(
+                                    (lambda b: _write_g3_canonical(_g3_dr0, _g3_ch, b)) if _g3_dr0 else None
+                                ),
+                            )
+                            if _res:
+                                from src.runtime.protagonist_switch import switch_protagonist
+                                _cp, _lens = _res
+                                _changed = switch_protagonist(_prot_ctx, runtime, orch.characters_config, _lens)
+                                if _changed and _changed[0] == _lens:
+                                    _prot_id, _prot_name = _changed
+                                    main_characters_snippet = _rebuild_prot_snippet()
+                                    save_protagonist_context(_g3_dr0, _prot_ctx) if _g3_dr0 else None
+                                log.info("[G3] 备选稿已提升为本章最终成文并切镜头 → %s（%s）", _prot_name, _prot_id)
+                            else:
+                                log.info("[G3] 备选稿提升失败或无此稿。")
         confirmed, result_phase2 = review_memory_plan(
             result_phase1, scope_id, time_str, place,
             edit_output_dir=edit_output_dir,

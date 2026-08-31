@@ -80,9 +80,10 @@ class CapabilityFlags:
     memory_layers: bool = False
     info_view: bool = False
     semantic_edges: bool = False
+    alt_draft: bool = False       # 候选备选稿（§4.1）——默认关，作者显式开启后方可生成/提升
 ```
 
-- `resolve_features(runtime_config, *, features_override: dict | None = None) -> CapabilityFlags`：**唯一规范读法**。
+- `resolve_features(runtime_config, *, features_override: dict | None = None, data_root: Path | None = None) -> CapabilityFlags`：**唯一规范读法**。
   优先读 `runtime.features`；缺失字段回退到**旧深层位置**（下表）并在首次命中时 `logger.warning`（一次性提示迁移）；`features_override`（会话内作者改动）最后覆盖。
   默认全 False。
 - `capabilities_to_dict(flags) -> dict` / `capabilities_from_dict`：序列化（供 `features.yaml` 落盘 / `/system/config` 表单调回）。
