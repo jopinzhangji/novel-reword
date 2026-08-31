@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from web.api.routers import characters, console, graph, novels, outline, session
+from web.api.routers import characters, console, graph, novels, outline, session, system
 from web.api.routers.session import SessionRegistry
 
 
@@ -40,6 +40,7 @@ def create_app(project_root: Path | str | None = None) -> FastAPI:
     app.include_router(outline.router, prefix=prefix)
     app.include_router(console.router, prefix=prefix)
     app.include_router(session.router, prefix=prefix)
+    app.include_router(system.router, prefix=prefix)
 
     static_dir = Path(__file__).resolve().parents[1] / "static"
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="dashboard")

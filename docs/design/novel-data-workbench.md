@@ -139,6 +139,20 @@ App Shell（D9 §5.1）
 
 Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既有回环执行 plan→审阅→写回；`/system` 管理 LLM/工作台/联网。**若目标约束**：Web 不重写引擎；所有写口仍走 G3 白名单与 D9 白名单键，S2 行为（超时重试/检索/写回门闩）与 CLI 时代完全一致。
 
+### 6.4 `/system` 系统设置面板（W3 可写，GG5，2026-08-31）
+
+承接 D9 §5.6「`/system` 管理 LLM/工作台/联网」。**读写契约**：
+
+| 键 | 路径（effective） | 读 | 写 |
+|----|------------------|----|----|
+| **工作台互斥** | `runtime.runtime.author_workbench.enabled` | ✔ | ✔ 布尔开关（`author_workbench_enabled`） |
+| **联网检索** | `runtime.runtime.author_harness.internet_search`（enabled/provider/max_chars/trust_level） | ✔ | ✔ 白名单四键 |
+| **LLM 提供方** | `framework.llm` + `framework.llm_options`（openai_compatible/火山方舟） | ✔ 只读展示 | ✘ **v1 只读**——真实提供方由环境 `.env`/密钥驱动（见 [LLM_AND_AGENT_DESIGN.md](../../docs/LLM_AND_AGENT_DESIGN.md)），运行时中途改提供方易断链，故仅展示不写 |
+
+**持久化写口**：与 G3 features.yaml 同构——写 **per-novel** `data/novels/<slug>/config/runtime.yaml`（顶层 `runtime:` 下 `author_workbench`/`author_harness.internet_search`），`load_runtime_config` 的 per-novel `deep_merge` 覆盖即可生效。**只写白名单键、合并保留既有键**（如 e2e 的 `runtime.novel_run`），**不动 `config/*.yaml` canonical 文件**；删除该 override 键即回默认。**生效边界**：设置由 `load_runtime_config` 在 `run_novel_with_author.main` 启动时快照 → 改后**下一会话/重启生效**，不逐回合热改（诚实标注，不假装即时生效）。LLM 只读 + 工作台/联网可写的默认取舍，避免破启动链。
+
+**前端**：静态面板 `web/static/index.html`「系统」分区——按钮切换显示，GET `/api/system` 渲染（当前书/LLM 只读卡/workbench 开关/internet 开关+provider+max_chars+trust_level），任一改动作 PATCH 后 GET 刷新。
+
 ---
 
 ## 7. 分阶段落地
@@ -149,6 +163,7 @@ Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既有回环
 | **G4a 后端 Read Api**（首选可交付） | `novels`/`graph`/`characters`/`outline`/`console` Read 与写口（全委托既有模块） | 单测全绿；无 LLM；多小说/单小说/控制台三类断言 ✅（2026-08-31：`src/workbench/` 服务层 20 单测 + 全量 **395 通过 + 1 跳过**；FastAPI router 留 G4b 薄包装） |
 | **G4b 前端壳 + 图谱页** | 承接 D9 W1–W2；顶置作品索引 + 各数据图谱组件（力导/雷达/时间线/节拍条/信息视野） | 浏览器可查看多小说进度与单小说六类图谱（读 G4a） ✅（2026-08-31：`web/api/app.py` FastAPI 工厂 + 五 router 薄包装 `src/workbench/` + `web/static/index.html` 无构建静态仪表盘；10 条 TestClient 单测，全量 **405 通过 + 1 跳过**；React/Vite 前端仍留 W 系列替换静态页） |
 | **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） ✅（2026-08-31：`WebInputAdapter`/`LogOnlyAuthorIngress` + `WorkbenchSession`/`SessionRegistry` + `session.py` router（409 互斥 + pending/reply/abort/delete）；11 条单测，全量 **416 通过 + 1 跳过**） |
+| **GG5 `/system` 系统设置** | D9 §5.6 LLM（只读）/工作台互斥（可写）/联网（可写）面板 | 浏览器内读 effective 设置、改 `author_workbench.enabled` + `internet_search.*` 落 per-novel `config/runtime.yaml`；get_post_set_state；LLM 只读不破启动链；全量回归保持绿 ✅（2026-08-31：详见 §6.4） |
 
 ---
 

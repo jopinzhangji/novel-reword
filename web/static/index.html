@@ -46,6 +46,7 @@
 <header>
   <h1>Novel-Data 工作台</h1>
   <select id="novelSel" onchange="loadNovel()"><option value="">（加载中…）</option></select>
+  <button onclick="toggleSystem()" style="margin-left:8px">系统</button>
 </header>
 <main>
   <h2 style="margin:4px 0 12px">作品进度总览</h2>
@@ -67,6 +68,7 @@
     <div id="sessionBox" style="border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:6px"></div>
     <div><h3 style="font-size:14px;margin:12px 0 8px">定制调整（能力 / 镜头 / 备选稿）</h3><div id="consoleBox"></div></div>
   </section>
+  <section id="secSystem" hidden><h2>系统设置（/system）</h2><div id="systemBox"></div></section>
 </main>
 
 <script>
@@ -348,6 +350,50 @@ async function abortSession(){
 async function endSession(){
   await j(`/api/session/${sessionKey}`, { method:"DELETE" }).catch(() => {});
   sessionKey = null; stopSessionPoll(); renderSession({ status:"none" });
+}
+
+async function loadSystem(){
+  const s = await j(`/api/system`);
+  const fw = s.framework || {}, wb = s.workbench || {}, net = s.internet_search || {};
+  const cn = s.current_novel;
+  const prov = net.provider === "playwright" ? "playwright"
+    : (net.provider ? esc(net.provider) : "（未设）");
+  el("systemBox").innerHTML = `<div class="grid">
+    <div class="mini"><h4>当前小说</h4>
+      ${cn ? `<b>${esc(cn.slug)}</b><div class="mut">${esc(cn.root)}</div>` : `<span class="noseq">未绑定（config/current_novel.yaml 缺失）</span>`}</div>
+    <div class="mini"><h4>LLM（v1 只读）</h4>
+      <code>${esc(fw.llm)}</code> · key=<code>${esc(fw.api_key_env || "—")}</code><br>
+      <div class="mut">${esc(JSON.stringify(fw.options || {}))} · ${esc(fw.note || "")}</div></div>
+    <div class="mini"><h4>作者在环互斥</h4>
+      <span class="pill${wb.author_workbench_enabled ? " on" : ""}" style="cursor:pointer"
+        onclick="patchSystem({'author_workbench_enabled':${wb.author_workbench_enabled ? "false" : "true"}})">
+        ${wb.author_workbench_enabled ? "互斥已开（终端静默）" : "终端交互已开"}</span>
+      <div class="mut">true 时作者交互只在前端（Session）</div></div>
+    <div class="mini"><h4>联网检索</h4>
+      <span class="pill${net.enabled ? " on" : ""}" style="cursor:pointer"
+        onclick="patchSystem({'internet_search':{'enabled':${net.enabled ? "false" : "true"}}})">
+        ${net.enabled ? "联网开" : "联网关"}</span>
+      provider <select style="width:100px" onchange="patchSystem({'internet_search':{'provider':this.value}})">
+        <option ${net.provider === "playwright" ? "selected" : ""}>playwright</option>
+      </select><br>
+      max_chars <input type="number" value="${net.max_chars || ""}" min="200" max="8000" step="100" style="width:80px"
+        onchange="patchSystem({'internet_search':{'max_chars':Number(this.value)}})" title="200..8000">
+      trust <select style="width:100px" onchange="patchSystem({'internet_search':{'trust_level':this.value}})">
+        ${["low","medium","high"].map(t => `<option value="${t}" ${net.trust_level === t ? "selected" : ""}>${t}</option>`).join("")}
+      </select>
+      <div class="mut">timeout ${net.timeout_ms}ms · ${net.max_results} 条 · classifier=${net.require_classifier_signal}</div></div>
+  </div>
+  ${s.override_source ? `<div class="mut" style="margin-top:8px">override 写入：<code>${esc(s.override_source)}</code></div>` : ""}
+  <div class="mut" style="margin-top:4px">${esc(s.effect_note || "")}</div>`;
+}
+async function patchSystem(payload){
+  await j("/api/system", { method:"PATCH", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+  await loadSystem();
+}
+function toggleSystem(){
+  const section = el("secSystem");
+  if (section.hidden){ section.hidden = false; loadSystem(); }
+  else { section.hidden = true; }
 }
 
 loadCards();
