@@ -66,6 +66,7 @@
 | D8 | [design/context-compression-adaptive-layered.md](../design/context-compression-adaptive-layered.md) | SDD | L2 | 组装后上下文：**自适应分层任务锚定压缩**、Compression Contract、与 `retrieve_for_intent` 截断的关系 |
 | D9 | [design/novel-reader-ui.md](../design/novel-reader-ui.md) | SDD | L2 | **作者在环工作台**（Web）：阅览 + 与 CLI 等价的设定讨论/章节回合交互；Session API + `WebInputAdapter`；W0–W6 |
 | D10 | [design/parallel-thread-bridging.md](../design/parallel-thread-bridging.md) | SDD | L2 | **G1 屏外线/并列主线**（off-screen 演进 + 桥接摘要，大纲 Phase 3）：屏外记忆类型、按需触发、桥接注入、成长复用 |
+| D11 | [design/evolution-pacing-coupling.md](../design/evolution-pacing-coupling.md) | SDD | L2 | **G2 演进层 ↔ 叙事策略层耦闸**：成长站姿进 PacingContract/Critic（前馈）、节拍 `tags` 实影响成长（反馈），默认关 |
 | E1 | [planning/outline-mvp-plan.md](../planning/outline-mvp-plan.md) | MVP 执行说明 | L3 | 大纲 MVP-0/1/2 范围与验收 |
 | E2 | [planning/next-iteration.md](../planning/next-iteration.md) | 迭代清单 | L3 | 进行中 / 下一步 / 已完成 |
 | O1 | [guides/usage.md](../guides/usage.md) | 手册 | L4 | 使用方式 |
