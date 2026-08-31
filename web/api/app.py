@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from web.api import security
 from web.api.routers import characters, console, graph, novels, outline, session, system
 from web.api.routers.session import SessionRegistry
 
@@ -29,6 +30,10 @@ def create_app(project_root: Path | str | None = None) -> FastAPI:
     root = Path(project_root) if project_root is not None else _default_root()
     app = FastAPI(title="Novel-Data Workbench (G4)")
     app.state.WORKBENCH_ROOT = root
+    # GG6 远程鉴权：读 config/web_api.yaml（host/port 由 web.api.server 用；auth.enabled 可开密码登录）
+    web_settings = security.load_web_settings(root)
+    app.state.WEB_SETTINGS = web_settings
+    security.install_auth(app, web_settings)
     # G4c 作者在环会话：注册表（data_root 一地对一）+ 可注入 run_fn（测试用假回环）
     app.state.SESSION_REGISTRY = SessionRegistry()
     app.state.SESSION_RUN_FN = None

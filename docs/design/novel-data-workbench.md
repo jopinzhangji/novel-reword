@@ -153,6 +153,28 @@ Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既有回环
 
 **前端**：静态面板 `web/static/index.html`「系统」分区——按钮切换显示，GET `/api/system` 渲染（当前书/LLM 只读卡/workbench 开关/internet 开关+provider+max_chars+trust_level），任一改动作 PATCH 后 GET 刷新。
 
+### 6.5 远程访问与鉴权（GG6，2026-08-31）
+
+工作台默认 `uvicorn` **loopback（127.0.0.1）仅本机**；要局域网/公网访问，host/port 与密码登录**可配置**（独立于小说运行时配置）。
+
+**新增 `config/web_api.yaml`（web 服务层专用）：**
+
+```yaml
+# web/api 服务层配置（独立于小说运行时配置；控制监听与远程鉴权）
+server:
+  host: "127.0.0.1"   # 默认仅本机；改 "0.0.0.0" 允许局域网/公网监听（见下方⚠）
+  port: 8000
+auth:
+  enabled: false      # 默认关（本地直访/现有单测不破）；true 则全站 HTTP Basic Auth
+  username: ""        # enabled=true 时必填
+  password: ""        # enabled=true 时必填；明文存（本地/局域网自用），公网建议反代/OAuth（见⚠）
+  realm: "Novel-Data Workbench"
+```
+
+- **生效**：`web/api/app.py::create_app(project_root)` 启动时读本项目 `config/web_api.yaml`，`auth.enabled=true` 时挂全站 Basic Auth **中间件**（`WWW-Authenticate: Basic`，浏览器原生弹「密码登录」）——`/api/*` 与静态页一并保护；`verify_credentials` 用 `hmac.compare_digest` 常量时间比较。`auth.enabled=true` 但 username/password 为空 → **启动即报错**（`web/api/server.py` fail-fast），绝不静默无鉴权裸奔。
+- **可配监听**：`python -m web.api.server` 读 `server.host/port` 直接 `uvicorn.run`（免手敲 `--host`）。默认仍 127.0.0.1；本机自用无需改。
+- **⚠ 暴露边界（诚实标注）**：app **无 OAuth/CORS 层**，若 `auth.enabled=false` 且 `host=0.0.0.0` = 全写口裸奔。`enabled=true` 的 Basic Auth 密码为**服务器明文共享口令**，只适合单作者局域网/反代后自用，**不建议直接对公网**；公网暴露请前置 nginx/caddy 反代 + 更强认证，或用 ssh 隧道（`ssh -L 8000:127.0.0.1:8000 用户@主机`）零暴露写口。
+
 ---
 
 ## 7. 分阶段落地
@@ -164,6 +186,7 @@ Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既有回环
 | **G4b 前端壳 + 图谱页** | 承接 D9 W1–W2；顶置作品索引 + 各数据图谱组件（力导/雷达/时间线/节拍条/信息视野） | 浏览器可查看多小说进度与单小说六类图谱（读 G4a） ✅（2026-08-31：`web/api/app.py` FastAPI 工厂 + 五 router 薄包装 `src/workbench/` + `web/static/index.html` 无构建静态仪表盘；10 条 TestClient 单测，全量 **405 通过 + 1 跳过**；React/Vite 前端仍留 W 系列替换静态页） |
 | **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） ✅（2026-08-31：`WebInputAdapter`/`LogOnlyAuthorIngress` + `WorkbenchSession`/`SessionRegistry` + `session.py` router（409 互斥 + pending/reply/abort/delete）；11 条单测，全量 **416 通过 + 1 跳过**） |
 | **GG5 `/system` 系统设置** | D9 §5.6 LLM（只读）/工作台互斥（可写）/联网（可写）面板 | 浏览器内读 effective 设置、改 `author_workbench.enabled` + `internet_search.*` 落 per-novel `config/runtime.yaml`；get_post_set_state；LLM 只读不破启动链；全量回归保持绿 ✅（2026-08-31：详见 §6.4） |
+| **GG6 远程访问与鉴权** | 可配监听（`config/web_api.yaml` server.host/port）+ 密码登录（Basic Auth，可开关） | `python -m web.api.server` 按配置监听；`auth.enabled=true` 全站 Basic Auth（默认关不破本地/单测）；空口令启动报错不裸奔；口令恒等比较；全量回归保持绿 ✅（2026-08-31：详见 §6.5） |
 
 ---
 

@@ -1,0 +1,10 @@
+# web/api 服务层配置（独立于小说运行时配置；控制监听与远程鉴权，见 D13 §6.5）。
+# 中文注释可保留；无敏感值提交（默认 auth.enabled=false）。
+server:
+  host: "127.0.0.1"   # 默认仅本机；改 "0.0.0.0" 允许局域网/公网监听（须先开 auth，见下）
+  port: 8000
+auth:
+  enabled: false      # true 则全站 HTTP Basic Auth（密码登录）；默认关（本地直访不打扰）
+  username: ""        # enabled=true 时必填，否则启动报错（不裸奔）
+  password: ""        # enabled=true 时必填；明文存（本地/局域网自用），公网建议反代/OAuth
+  realm: "Novel-Data Workbench"
