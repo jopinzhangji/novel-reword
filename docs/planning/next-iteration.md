@@ -214,7 +214,7 @@
 - **工作台面板补全（G4 后；SSOT 见 [novel-data-workbench.md](../design/novel-data-workbench.md)；复用既有确定性模块，纯前端 + 必要后端薄读口，default 不破）**：
   - **G4 已就绪**：数据图谱（关系/成长/视野/记忆/屏外/节拍）+ 作者控制台（能力/镜头/备选稿）+ Session 作者在环 + **`/system` 系统设置（GG5 ✅, 2026-08-31）**。
   - **#2 五维成长雷达图 ✅**（2026-08-31）：`characters.py` `character_detail` 增 `growth_radar`（`level=min(1, Σ/6)` 确定性打分，成长深度非绝对特质）+ 前端人物卡内嵌 SVG 雷达（D13 §6.6；2 单测，全量 **450 通过 + 1 跳过**）。
-  - **#3 迁移日志时间线**：`characters.py::character_detail` 已含 `growth.transition_log` → 前端按 turn 时间线展开。
+  - **#3 迁移日志时间线 ✅**（2026-08-31）：`characters.py::character_detail` 已含 `growth.transition_log` → 前端人物卡内按 turn 升序时间线展开（成长命中 `{rule,turn,scope_id,reason,deltas}` + guard 审计 `{rule,action,guard_reason}` 两类，guard 加「钳制/跳过」徽标），纯前端无新读口（D13 §6.6；全量回归保持绿）。
   - **#4 L1记忆 / 屏外线时间线**：`characters.py` 已含 `memories_l1` + `off_screen_threads`（屏外线可另行读 threads YAML 消费状态）→ 前端时间线视图。
   - **#5 跨卡联动**：点人物卡/关系节点 → 联动刷新 成长·记忆·视野·屏外·节拍 各卡（当前各卡独立加载）。验收：浏览器单小说内跨卡联动打开即联动刷新；全量回归保持绿。
 - **大纲与节拍 + 主角正文轴 + 多线并行（分阶段落地）**：

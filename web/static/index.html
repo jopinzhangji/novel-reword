@@ -36,8 +36,11 @@
   .pill { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:2px 10px;
           font-size:12px; margin:2px; cursor:pointer; user-select:none; }
   .pill.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .pill.warn { border-color:#c05621; color:#b8500f; cursor:default; font-size:10px; }
   .tag { background:#eef1f5; border-radius:4px; padding:1px 6px; font-size:11px; margin-right:4px; }
   .mut { color:var(--mut); }
+  .tl { border-top:1px dashed var(--line); margin-top:6px; padding-top:6px; }
+  .tl-row { padding:4px 0; border-bottom:1px dashed var(--line); font-size:12px; }
   svg text { font-family:inherit; font-size:12px; fill:var(--ink); }
   .noseq { color:var(--mut); font-size:13px; }
 </style>
@@ -187,8 +190,9 @@ async function loadChars(){
       .map(k => [k, gr[k] || {}]).filter(x => Object.keys(x[1]).length);
     html += `<div class="mini"><h4>${esc(d.id)}</h4>
       ${radarSVG(d.growth_radar)}
-      <div class="mut">迁移 ${gr.transition_log ? gr.transition_log.length : 0} · 视野 已知 ${d.view.known}/${d.view.total_events} · L1 记忆 ${d.memories_l1.length}</div>
-      <div>${dims.map(([k,v]) => `<code>${k.slice(0,-6)}</code> ${esc(Object.entries(v).map(([kk,vv]) => kk+":"+vv).join(", "))}`).join("<br>") || "（无成长维度）"}</div>
+      ${growthTimeline(gr.transition_log)}
+      <div class="mut" style="margin-top:4px">视野 已知 ${d.view.known}/${d.view.total_events} · L1 记忆 ${d.memories_l1.length}</div>
+      ${dims.length ? `<div style="margin-top:4px">${dims.map(([k,v]) => `<code>${k.slice(0,-6)}</code> ${esc(Object.entries(v).map(([kk,vv]) => kk+":"+vv).join(", "))}`).join("<br>")}</div>` : ""}
       ${d.runtime_only_layers ? `<div class="mut" style="margin-top:4px">L2/L3 为运行期内存态（未落盘）</div>` : ""}
       ${d.off_screen_threads && d.off_screen_threads.length ? `<div class="mut">屏外线 ${d.off_screen_threads.length} 条</div>` : ""}
     </div>`;
@@ -212,6 +216,35 @@ function radarSVG(rad){
   }).join("");
   const data = (rad || []).map((r,k) => { const a=ring[k], rr=R*(r.level||0); return (k?"L":"M") + (cx+rr*Math.cos(a)).toFixed(1) + "," + (cy+rr*Math.sin(a)).toFixed(1); }).join("") + "Z";
   return `<svg width="150" height="132" viewBox="0 0 150 132" style="display:block;margin:4px auto" role="img" aria-label="五维成长雷达">` + grid + axes + labels + `<path d="${data}" fill="rgba(86,124,226,.18)" stroke="var(--acc)" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+}
+
+// 面板 #3：迁移日志时间线（纯前端渲染 growth.transition_log）。两类条目：
+//   成长命中 {rule, turn, scope_id, reason, deltas:[{dim,key,value,note}]}；guard 审计 {rule:"guard.*", turn, scope_id, reason, guard, action, guard_reason}
+const _DIM_TL_FULL = {power_state:"能力", mind_state:"心理", social_state:"关系", goal_state:"目标", resource_state:"资源"};
+function growthTimeline(tl){
+  const log = Array.isArray(tl) ? tl : [];
+  if (!log.length) return `<div class="mut" style="margin-top:6px">无迁移记录</div>`;
+  const rows = [...log].sort((a,b) => ((a.turn==null?1e9:a.turn) - (b.turn==null?1e9:b.turn)));
+  return `<div class="tl">` + rows.map(e => {
+    const isGuard = /^guard\./.test(e.rule || "");
+    let body;
+    if (isGuard){
+      const act = e.action === "clamp" ? "钳制" : "跳过";
+      body = `<span class="pill warn" title="${esc(e.guard_reason || e.reason || "")}">guard·${esc(act)}</span> ${esc(e.guard||"")}${e.guard_reason ? ` <span class="mut">${esc(e.guard_reason)}</span>` : ""}`;
+    } else {
+      const d = e.deltas && e.deltas.length ? e.deltas.map(d => {
+        if (d && typeof d === "object" && !Array.isArray(d) && d.key !== undefined){
+          const lab = _DIM_TL_FULL[d.dim] || d.dim || "";
+          const v = d.value===undefined ? "" : " " + (typeof d.value==="number" && d.value>0 ? "+"+d.value : d.value);
+          return `<span class="tag">${esc(lab)}·${esc(d.key)}${v}</span>`;
+        }
+        return "";
+      }).join(" ") : "";
+      body = `<code style="font-size:10px">${esc(e.rule)}</code> ${d}`;
+    }
+    const head = `<b style="color:var(--acc)">#${e.turn==null?0:e.turn}</b>${e.scope_id ? ` <span class="mut">${esc(e.scope_id)}</span>` : ""}`;
+    return `<div class="tl-row"><div>${head}</div><div>${body}</div><div class="mut" style="font-size:10px;margin-top:2px">${esc((e.reason||"").slice(0,60))}${(e.reason||"").length>60?"…":""}</div></div>`;
+  }).join("") + `</div>`;
 }
 
 async function loadRhythm(){
