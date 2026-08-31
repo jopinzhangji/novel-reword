@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Novel-Data 工作台（G4）</title>
+<style>
+  :root { --ink:#1c2733; --mut:#53606e; --line:#dce3ea; --bg:#f6f8fa; --card:#fff; --acc:#2f6fed; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC",sans-serif;
+         color:var(--ink); background:var(--bg); }
+  header { display:flex; align-items:center; gap:16px; padding:14px 22px; background:var(--card);
+           border-bottom:1px solid var(--line); position:sticky; top:0; z-index:9; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  header select { padding:6px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
+  main { max-width:1200px; margin:0 auto; padding:22px; }
+  #cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px;
+          cursor:pointer; transition:box-shadow .15s, border-color .15s; }
+  .card:hover { box-shadow:0 4px 14px rgba(28,39,51,.08); border-color:var(--acc); }
+  .card h3 { margin:0 0 4px; font-size:15px; }
+  .card .slug { color:var(--mut); font-size:12px; margin-bottom:8px; }
+  .row { display:flex; justify-content:space-between; font-size:13px; padding:2px 0; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px;
+            margin:18px 0; padding:16px 18px; }
+  section h2 { margin:0 0 10px; font-size:15px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+  .mini { border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; }
+  .mini h4 { margin:0 0 6px; font-size:13px; }
+  pre { background:#0e1726; color:#cfe6ff; padding:10px; border-radius:8px; overflow:auto; font-size:12px; }
+  code { background:#eef1f5; border-radius:5px; padding:1px 5px; font-size:12px; }
+  button { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:6px 12px;
+           cursor:pointer; font-size:13px; color:var(--ink); }
+  button:hover { border-color:var(--acc); color:var(--acc); }
+  input,textarea { border:1px solid var(--line); border-radius:8px; padding:6px 8px; font-size:13px; }
+  .pill { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:2px 10px;
+          font-size:12px; margin:2px; cursor:pointer; user-select:none; }
+  .pill.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .tag { background:#eef1f5; border-radius:4px; padding:1px 6px; font-size:11px; margin-right:4px; }
+  .mut { color:var(--mut); }
+  svg text { font-family:inherit; font-size:12px; fill:var(--ink); }
+  .noseq { color:var(--mut); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Novel-Data 工作台</h1>
+  <select id="novelSel" onchange="loadNovel()"><option value="">（加载中…）</option></select>
+</header>
+<main>
+  <h2 style="margin:4px 0 12px">作品进度总览</h2>
+  <div id="cards" class="noseq">…</div>
+
+  <section id="secSummary" hidden><h2>进度</h2><div id="summary"></div></section>
+  <section id="secGraph" hidden><h2>关系图谱</h2>
+    <div style="margin-bottom:8px">
+      <input id="egoCenter" placeholder="心图中心角色 id" style="width:160px">
+      <button onclick="loadGraph()">刷新 / 心图</button>
+      <button onclick="loadGraph(true)">全书谱</button>
+      <span class="mut" style="margin-left:8px">（选中角色后心图一跳）</span>
+    </div>
+    <div id="graph"></div>
+  </section>
+  <section id="secChars" hidden><h2>人物情况</h2><div id="chars"></div></section>
+  <section id="secRhythm" hidden><h2>章节 · 节拍情志条</h2><div id="rhythm"></div></section>
+  <section id="secConsole" hidden><h2>作者控制台（能力 / 镜头 / 备选稿）</h2><div id="consoleBox"></div></section>
+</main>
+
+<script>
+"use strict";
+let currentSlug = null;
+
+async function j(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(path + " -> " + r.status);
+  return await r.json();
+}
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c])); }
+
+function card(n) {
+  const p = n.outline_pointer || {};
+  const beat = n.had_any_beat ? (p.chapter_title || "?") + " · " + (p.beat_intent || "?") : "无大纲";
+  return `<div class="card" onclick="pickNovel('${esc(n.slug)}')">
+    <h3>${esc(n.title)}</h3>
+    <div class="slug">${esc(n.slug)} · ${esc(n.status)}</div>
+    <div class="row"><span>当前</span><span>${esc(beat)}</span></div>
+    <div class="row"><span>回合</span><span>${p.turns_in_beat ?? "—"}</span></div>
+    <div class="row"><span>性格点变化</span><span>${n.growth && n.growth.characters_with_growth || 0}</span></div>
+    <div class="row"><span>关系边</span><span>${n.edge_count ?? 0}</span></div>
+    <div class="row"><span>事件</span><span>${n.scope_event_count ?? 0}</span></div>
+  </div>`;
+}
+
+async function loadCards(){
+  try {
+    const items = await j("/api/novels");
+    el("cards").innerHTML = items.map(card).join("");
+    const sel = el("novelSel");
+    sel.innerHTML = items.map(n => `<option value="${esc(n.slug)}">${esc(n.title)} (${esc(n.slug)})</option>`).join("");
+    if (items.length && !currentSlug){ sel.value = items[0].slug; loadNovel(); }
+  } catch(e){ el("cards").innerHTML = `<span class="noseq">加载失败：${esc(e.message)}</span>`; }
+}
+
+function pickNovel(slug){ el("novelSel").value = slug; loadNovel(); }
+
+async function loadNovel(){
+  currentSlug = el("novelSel").value;
+  if (!currentSlug) return;
+  ["secSummary","secGraph","secChars","secRhythm","secConsole"].forEach(id => el(id).hidden = false);
+  await loadSummary(); await loadGraph(); await loadChars(); await loadRhythm(); await loadConsole();
+}
+
+async function loadSummary(){
+  const n = await j(`/api/novels/${currentSlug}/summary`);
+  const p = n.outline_pointer || {};
+  el("summary").innerHTML = `<div class="grid">
+    <div class="mini"><h4>位置</h4>${esc(p.chapter_title||"—")} · ${esc(p.beat_intent||"—")}<br>
+      <span class="mut">回合 ${p.turns_in_beat ?? "—"} / 章 ${esc(p.chapter_id||"—")} 拍 ${esc(p.beat_id||"—")}</span></div>
+    <div class="mini"><h4>成长</h4>有状态角色 ${n.growth && n.growth.characters_with_growth||0} · 迁移 ${n.growth && n.growth.transition_entries||0}</div>
+    <div class="mini"><h4>关系</h4>${n.edge_count||0} 条边 · ${n.character_count||0} 角色</div>
+    <div class="mini"><h4>事件</h4>${n.scope_event_count||0} 条 scope 事件</div>
+  </div>`;
+}
+
+async function loadGraph(whole){
+  if (!currentSlug) return;
+  const c = el("egoCenter").value.trim();
+  let obj;
+  if (whole || !c) obj = await j(`/api/novels/${currentSlug}/graph`);
+  else obj = await j(`/api/novels/${currentSlug}/graph/ego?center=${encodeURIComponent(c)}&hops=1`);
+  renderGraph(obj);
+}
+
+function renderGraph(g){
+  const nodes = g.nodes || [], edges = g.edges || [];
+  if (!nodes.length){ el("graph").innerHTML = `<span class="noseq">暂无关系图谱。</span>`; return; }
+  const W = 760, H = 460, R = Math.min(W,H)/2 - 40, cx = W/2, cy = H/2;
+  const pos = {};
+  nodes.forEach((n,i) => {
+    const ang = 2*Math.PI*i/nodes.length - Math.PI/2;
+    pos[n.id] = [cx + R*Math.cos(ang), cy + R*Math.sin(ang)];
+  });
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="max-width:100%">`;
+  edges.forEach(e => {
+    const [x1,y1] = pos[e.source_id], [x2,y2] = pos[e.target_id];
+    const dash = e.inactive ? ' stroke-dasharray="5 4" opacity="0.55"' : '';
+    s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#9aa7b5" stroke-width="${Math.max(1, (e.intensity||1)*1.2)}"${dash}/>`;
+  });
+  nodes.forEach(n => {
+    const [x,y] = pos[n.id];
+    s += `<g onclick="loadEgo('${esc(n.id)}')" style="cursor:pointer">
+      <circle cx="${x}" cy="${y}" r="18" fill="#fff" stroke="#7d8ea0" stroke-width="1.5"/>
+      <text x="${x}" y="${y+4}" text-anchor="middle">${esc(n.name || n.id)}</text></g>`;
+  });
+  s += "</svg>";
+  el("graph").innerHTML = s + `<div style="margin-top:6px"><button onclick="loadPair()">角色对</button>
+    <input id="pairA" placeholder="a" style="width:120px"><input id="pairB" placeholder="b" style="width:120px"><div id="pairOut"></div></div>`;
+}
+function loadEgo(id){ el("egoCenter").value = id; loadGraph(); }
+
+async function loadPair(){
+  const a = el("pairA").value.trim(), b = el("pairB").value.trim();
+  if (!a || !b) return;
+  const p = await j(`/api/novels/${currentSlug}/graph/pair?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+  const r = p.relation || p.reverse_relation;
+  el("pairOut").innerHTML = r
+    ? `关系：<code>${esc(r.type)}</code> 强度 <code>${esc(r.intensity)}</code> · change_log ${r.change_log ? r.change_log.length : 0} 条 <pre>${esc(JSON.stringify(r.change_log || [], null, 2))}</pre>`
+    : `<span class="noseq">无该关系边。</span>`;
+}
+
+async function loadChars(){
+  const list = await j(`/api/novels/${currentSlug}/characters`);
+  if (!list.length){ el("chars").innerHTML = `<span class="noseq">无角色。</span>`; return; }
+  let html = `<div class="grid">`;
+  for (const c of list){
+    const d = await j(`/api/novels/${currentSlug}/characters/${encodeURIComponent(c.id)}`);
+    const gr = d.growth || {};
+    const dims = ["power_state","mind_state","social_state","goal_state","resource_state"]
+      .map(k => [k, gr[k] || {}]).filter(x => Object.keys(x[1]).length);
+    html += `<div class="mini"><h4>${esc(d.id)}</h4>
+      <div class="mut">迁移 ${gr.transition_log ? gr.transition_log.length : 0} · 视野 已知 ${d.view.known}/${d.view.total_events} · L1 记忆 ${d.memories_l1.length}</div>
+      <div>${dims.map(([k,v]) => `<code>${k.slice(0,-6)}</code> ${esc(Object.entries(v).map(([kk,vv]) => kk+":"+vv).join(", "))}`).join("<br>") || "（无成长维度）"}</div>
+      ${d.runtime_only_layers ? `<div class="mut" style="margin-top:4px">L2/L3 为运行期内存态（未落盘）</div>` : ""}
+      ${d.off_screen_threads && d.off_screen_threads.length ? `<div class="mut">屏外线 ${d.off_screen_threads.length} 条</div>` : ""}
+    </div>`;
+  }
+  el("chars").innerHTML = html + "</div>";
+}
+
+async function loadRhythm(){
+  const p = await j(`/api/novels/${currentSlug}/progress`);
+  if (!p.present){ el("rhythm").innerHTML = `<span class="noseq">暂无大纲。</span>`; return; }
+  const o = await j(`/api/novels/${currentSlug}/outline`);
+  let beatsHtml = "";
+  (o.chapters || []).forEach(ch => {
+    const beats = ch.beats || [];
+    beatsHtml += `<div style="margin:4px 0"><b>${esc(ch.title || ch.id)}</b></div>`;
+    beats.forEach(b => {
+      const cur = p.current && p.current.chapter_id === ch.id && p.current.beat_id === b.id;
+      beatsHtml += `<span class="pill${cur ? " on" : ""}" title="${esc(b.intent || "")}">${esc(b.id)}${b.tags && b.tags.length ? " " + b.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("") : ""}</span>`;
+    });
+  });
+  const cur = p.current;
+  el("rhythm").innerHTML = cur
+    ? `<div style="margin-bottom:8px">当前：<b>${esc(cur.chapter_title)}</b> · ${esc(cur.beat_intent)}（回合 ${cur.turns_in_beat}/${cur.soft_max_turns}）
+        ${cur.missing_ref ? `<span class="noseq">引用缺失：${esc(cur.missing_ref)}</span>` : ""}
+        <div class="mut">next: ${esc(cur.next_beat_hint || "")}</div></div>` + beatsHtml
+    : beatsHtml || `<span class="noseq">空大纲。</span>`;
+}
+
+async function loadConsole(){
+  const s = await j(`/api/novels/${currentSlug}/console`);
+  const feat = s.features && s.features.flags || {};
+  const names = Object.keys(feat);
+  let pills = names.map(k => `<span class="pill${feat[k] ? " on" : ""}" data-feat="${esc(k)}" onclick="toggleFeature('${esc(k)}')">${esc(k)}</span>`).join("");
+  const lens = s.lens || {};
+  const sel = (lens.selectable || []).map(c => `<option value="${esc(c.id)}" ${c.id === lens.protagonist_id ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+  const dr = (s.drafts || []).map(d => ` <span class="pill ${d.status==="promoted" ? "on" : ""}">${esc(d.lens_id)} · ${esc(d.status)}</span>`).join("");
+  el("consoleBox").innerHTML = `
+    <div class="grid">
+      <div class="mini"><h4>能力开关</h4><div id="featPills">${pills}</div>
+        <div class="mut" style="margin-top:6px">persisted override: <code>${esc(JSON.stringify(s.features && s.features.persisted_override || {}))}</code></div></div>
+      <div class="mini"><h4>导出镜头（运行时）</h4>
+        <select id="lensSel" style="min-width:160px">${sel}</select>
+        <button onclick="switchLens()">切换</button>
+        <div class="mut">当前：${esc(lens.protagonist_id)}（override=${lens.is_override}）</div></div>
+      <div class="mini"><h4>候选备选稿</h4>${dr || `<span class="noseq">暂无</span>`}
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+          <input id="draftChapter" placeholder="章节" style="width:80px">
+          <input id="draftLens" placeholder="镜头id" style="width:90px">
+          <input id="draftBody" placeholder="正文摘要" style="flex:1;min-width:140px">
+          <button onclick="writeDraft()">建稿</button>
+          <button onclick="promoteDraft()">提升</button>
+        </div></div>
+    </div>`;
+}
+
+async function toggleFeature(k){
+  const cur = el("featPills") ? document.querySelector(`.pill.on[data-feat="${k}"]`) : null;
+  const next = !(cur);
+  await j(`/api/novels/${currentSlug}/features`, { method:"PATCH",
+    headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ features:{ [k]: next } }) });
+  loadConsole();
+}
+async function switchLens(){
+  const t = el("lensSel").value;
+  await j(`/api/novels/${currentSlug}/protagonist`, { method:"PUT",
+    headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ target_id: t }) });
+  loadConsole();
+}
+async function writeDraft(){
+  await j(`/api/novels/${currentSlug}/drafts`, { method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ chapter_id: el("draftChapter").value, lens_id: el("draftLens").value, body: el("draftBody").value }) });
+  loadConsole();
+}
+async function promoteDraft(){
+  const r = await j(`/api/novels/${currentSlug}/drafts/promote`, { method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ chapter_id: el("draftChapter").value, lens_id: el("draftLens").value }) });
+  alert(r.promoted ? `已提升 → ${r.lens_id}` : `未提升：${r.reason}`);
+  loadConsole();
+}
+
+loadCards();
+</script>
+</body>
+</html>

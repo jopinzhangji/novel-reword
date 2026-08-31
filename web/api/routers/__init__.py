@@ -1,0 +1,1 @@
+"""G4b FastAPI routers：对 src/workbench/ 确定性服务层的薄包装（不重复实现聚合逻辑）。"""
