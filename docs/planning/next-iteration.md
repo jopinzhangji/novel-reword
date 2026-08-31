@@ -13,7 +13,7 @@
 5. **并行**：任务 E（初稿→终态书名 E2E）、小说级路径收口、`run_novel_with_author` LLM 连续超时降级。
 6. **上下文压缩（D8）**：文档 ✅；编码 **CC-b～** 见待办。
 7. **智能体基础方案 I 系列**：I1–I5 ✅；下一步 **I6**（A/B 与回滚）。
-8. **小说作者在环工作台（D9）**：**W0 ✅**；编码 **W1 阅览 → W2 壳+系统设置只读 → W3 设定交互+`/system` 可写 → W4 正篇交互**。**G4 Novel-Data 工作台（SDD 文档闸 ✅，D13）** 承接：多小说进度 ⇄ 六类数据图谱（关系/成长/视野/记忆/屏外/节拍，均走已建的确定性模块）⇄ 作者控制台（复用 G3 能力/镜头/备选稿 + D9 Session）。首切片 **G4a 后端确定性 Read API**；见 [novel-data-workbench.md](../design/novel-data-workbench.md)。
+8. **小说作者在环工作台（D9）**：**W0 ✅**；编码 **W1 阅览 → W2 壳+系统设置只读 → W3 设定交互+`/system` 可写 → W4 正篇交互**。**G4 Novel-Data 工作台（SDD 文档闸 ✅，D13）** 承接：多小说进度 ⇄ 六类数据图谱（关系/成长/视野/记忆/屏外/节拍，均走已建的确定性模块）⇄ 作者控制台（复用 G3 能力/镜头/备选稿 + D9 Session）。**编码**：**G4a 后端确定性服务层 ✅**（2026-08-31：`src/workbench/` 纯 Python、无 LLM 无 Web 依赖——`novels.py`（多小说进度卡）、`graph.py`（全量/ego 心图/单对+change_log）、`characters.py`（五维成长/信息视野/L1 记忆/屏外线）、`outline.py`（大纲+节拍指针+missing_ref）、`console.py`（G3 能力/镜头/备选稿读写口，全走白名单）；G4b FastAPI 对其薄包装；20 条单测，全量 **395 通过 + 1 跳过**）；见 [novel-data-workbench.md](../design/novel-data-workbench.md)。
 
 ---
 

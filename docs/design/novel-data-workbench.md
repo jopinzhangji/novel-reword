@@ -84,10 +84,14 @@ App Shell（D9 §5.1）
 | **章节·情志节拍** | `outline.yaml` beats（intent/pace/tags/status）+ `progress.yaml` 指针 | 章/拍情志条：`pace` 颜色带 + `tags` 徽章 + 进度指针 |
 
 > 所有视图 **只读 + 确定性**：后端 Read API 委托既有模块，无 LLM，可单测（不破船）。
+>
+> **落盘现实（G4a 已核实）**：盘上持久化的是 **L1 事实**（`book/characters/<id>/events/turn_*.md` 与 scope 事件）与**屏外线**（`threads/off_screen.yaml`）；**L2 解释 / L3 策略 与 平行主线线程为运行期内存态（`MemoryStorage`），未落盘**。工作台镜像此现实：记忆视图给盘上 L1 分层时间线，并标 `runtime_only_layers: true`（前端刻意展示「会话内可见」，不虚构跨重启记忆）；平行主线同此前端报运行期态。**不做**为此新增 L2/L3 持久化（超出 G4 只读视野范围，留后续）。
 
 ---
 
 ## 5. 后端 Read Api 面（首切片，纯确定性，可直接实现）
+
+> **G4a 落地位置（2026-08-31）**：确定性服务层实作在 **`src/workbench/`**（纯 Python、无 LLM 无 Web 依赖、可单测）；下表各 Router 由 G4b 的 FastAPI router **对 `src/workbench/` 同名模块做薄包装**即可，不再重复实现聚合逻辑。
 
 `web/api/routers/` 下（沿用 D9 §9.2 目录）：
 
@@ -140,7 +144,7 @@ Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既有回环
 | 阶段 | 内容 | 验收 |
 |------|------|------|
 | **G4 文档闸** | 本 SDD + D13 登记 + next-iteration 标注 + WORKLOG | ✅（2026-08-31） |
-| **G4a 后端 Read Api**（首选可交付） | `novels`/`graph`/`characters`/`outline`/`console` Read 与写口（全委托既有模块） | 单测全绿；无 LLM；多小说/单小说/控制台三类断言 |
+| **G4a 后端 Read Api**（首选可交付） | `novels`/`graph`/`characters`/`outline`/`console` Read 与写口（全委托既有模块） | 单测全绿；无 LLM；多小说/单小说/控制台三类断言 ✅（2026-08-31：`src/workbench/` 服务层 20 单测 + 全量 **395 通过 + 1 跳过**；FastAPI router 留 G4b 薄包装） |
 | **G4b 前端壳 + 图谱页** | 承接 D9 W1–W2；顶置作品索引 + 各数据图谱组件（力导/雷达/时间线/节拍条/信息视野） | 浏览器可查看多小说进度与单小说六类图谱（读 G4a） |
 | **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） |
 
