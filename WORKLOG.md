@@ -35,6 +35,13 @@
 - **doc-first**：`docs/design/novel-data-workbench.md` §6.7 + §7 行 + 修订记录；`docs/planning/next-iteration.md` #6 标注；`WORKLOG` 本节。
 - **验收**（后补）：`node --check` 抽 JS；两栏切维度只显示对应 pane；控制台含终端输出 + 正文；`GET /api/novels/{slug}/story` 返回 body；无 LLM；全量回归保持绿。
 
+### 公网自测开启 + 测试兼容硬化（工程·配置，2026-09-01）
+
+- **需求**：用户确认开启公网远程自测；约定进 git 的 `config/web_api.yaml` 保持**默认安全配置**（127.0.0.1 + auth 关），定制公网配置仅运行时用、不入库。
+- **落地**：
+  - `config/web_api.yaml`（**工作区定制，不入 git**）：`server.host=0.0.0.0` + `auth.enabled=true` + username/password（强口令）→ 服务重启后公网 Basic Auth 密码登录自测。入库仍为 HEAD 默认（`git checkout` 即还原）。
+  - `tests/unit/test_web_session.py`（**入库修复**）：`app` fixture 由 `create_app()`（无参走仓库根，`_default_root()` 读 `config/web_api.yaml`，随其 auth 开关而 401）改为 `create_app(tmp_path)`（无配置文件 → auth 默认关），**隔离仓库提交的 web 配置**；其余 web 测试本就传 `tmp_path`/`project` 不受影响。全量回归仍 **464 通过 + 1 跳过**。
+
 ---
 
 ## 2026-08-31

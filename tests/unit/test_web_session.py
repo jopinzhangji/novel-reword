@@ -47,8 +47,10 @@ def _make_fake_run():
 
 
 @pytest.fixture()
-def app():
-    a = create_app()
+def app(tmp_path):
+    # 用临时根（无 config/web_api.yaml → auth 默认关），隔离仓库提交的 web 配置：
+    # create_app() 无参走仓库根会让本套件随 config/web_api.yaml 的 auth 开关而 401。
+    a = create_app(tmp_path)
     fake, store = _make_fake_run()
     a.state.SESSION_RUN_FN = fake
     a.state.SESSION_REGISTRY = SessionRegistry()
