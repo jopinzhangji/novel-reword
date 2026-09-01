@@ -194,6 +194,10 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             runtime,
             orch.world_config,
             orch.characters_config,
+            # 必须透传：input_fn 缺失时 AuthorSession.read_line 回退 builtin input()，
+            # Web 会话（nohup 无 stdin）会 EOFError。透传后设计阶段的交互（含危险覆盖确认）
+            # 全部桥接前端 adapter。
+            input_fn=input_fn,
         )
         if config_edited:
             log.info("设定已编辑，重新加载配置与编排器。")

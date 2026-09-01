@@ -42,6 +42,16 @@
   - `config/web_api.yaml`（**工作区定制，不入 git**）：`server.host=0.0.0.0` + `auth.enabled=true` + username/password（强口令）→ 服务重启后公网 Basic Auth 密码登录自测。入库仍为 HEAD 默认（`git checkout` 即还原）。
   - `tests/unit/test_web_session.py`（**入库修复**）：`app` fixture 由 `create_app()`（无参走仓库根，`_default_root()` 读 `config/web_api.yaml`，随其 auth 开关而 401）改为 `create_app(tmp_path)`（无配置文件 → auth 默认关），**隔离仓库提交的 web 配置**；其余 web 测试本就传 `tmp_path`/`project` 不受影响。全量回归仍 **464 通过 + 1 跳过**。
 
+### 控制台启动 EOFError 修复 + 会话失败终端可观性（工程·修复，2026-09-01）
+
+- **现象**：工作台「控制台」启动作者在环后 `status=failed`、`error=EOF when reading a line`，但**终端 <pre> 无任何报错打印**。
+- **根因**（复现 + 读代码确认）：`run_novel_with_author.main` 在 `run_design_phase(...)` 处**未透传 `input_fn`**（其余调用如交互引导 176 行都传了）。`run_design_phase` 内 `AuthorSession.for_design_phase(input_fn=None)` → `read_line` 的 `fn = self.input_fn or input` 回退**内置 `input()`**；CLI 有附着 stdin 故从未触发，Web 会话（后台 daemon 线程 + nohup 无 stdin）一遇交互确认即 `EOFError`。日志停在设定阶段的「重新生成将覆盖现有设定」，崩溃未入日志。
+- **修复**：
+  - `run_novel_with_author.py`：`run_design_phase(..., input_fn=input_fn)` 透传，设计阶段交互（含危险覆盖确认）全部桥接前端 adapter（本次即 `_StreamTailHandler`/WebInputAdapter 通道）。
+  - `web/api/session_runner.py` `_run_guard` except 分支：`status=failed` 时把「作者在环会话失败: <e>」经**仍在挂载的根 logger** 打进终端日志尾部（离挂前），令崩溃**终端可观**（D13 §6.7 动人）。
+- **单测**：`test_session_runner_stream.py` 增 1 条——`run_fn` 抛 `EOFError` → `status=failed`、`error` 含字样、且终端 stream 尾部含「作者在环会话失败」行、离挂还原。全量 **465 通过 + 1 跳过**。
+- **实机验证**：重启服务后重开会话——不再 EOF，而是 `pending='是否保留现有设定？(y=…, 默认 y)'` 桥接前端；回 `y` 后推进至设计审阅 `(y/e/c/p)`，终端持续打印设定内容，正常作者在环。
+
 ---
 
 ## 2026-08-31

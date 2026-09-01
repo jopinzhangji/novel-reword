@@ -49,3 +49,22 @@ def test_no_session_attaches_nothing():
     s = WorkbenchSession(data_root="z", run_fn=lambda input_fn=None: None)
     assert s._stream_tail not in logging.getLogger().handlers
     assert logging.getLogger().level == before
+
+
+def test_failure_is_error_shown_in_stream_and_logged():
+    """run_fn 抛异常 → 会话 failed、error 可观测，且错误打印进终端日志尾部（D13 §6.7 可观性）。"""
+    def boom(input_fn=None):
+        logging.getLogger("novel.test").info("引擎: 写回完成")
+        raise EOFError("EOF when reading a line")
+
+    s = WorkbenchSession(data_root="f", run_fn=boom)
+    s.start()
+    s._thread.join(timeout=5)
+    st = s.state()
+    assert st["status"] == "failed"
+    assert "EOF when reading a line" in (st["error"] or "")
+    joined = "\n".join(st["stream"])
+    assert "引擎: 写回完成" in joined          # 前置正常日志仍在
+    assert "作者在环会话失败" in joined        # 失败本身也进入终端尾部，终端可看到错误
+    # 离挂还原照旧
+    assert s._stream_tail not in logging.getLogger().handlers

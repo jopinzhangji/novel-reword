@@ -101,6 +101,11 @@ class WorkbenchSession:
             if self.status != "aborted":
                 self.status = "failed"
                 self.error = str(e)
+                # 让失败也进入终端日志尾部（根 logger 仍在挂载 → 被 _StreamTailHandler 捕获），
+                # 否则崩溃只见 status=failed、终端无任何打印（D13 §6.7 控制台终端可观性）。
+                logging.getLogger("web.api.session_runner").error(
+                    "作者在环会话失败: %s", e
+                )
         finally:
             self._detach_logger()
 
