@@ -13,6 +13,19 @@
 
 ---
 
+## 2026-09-01
+
+### README 补「启用 / 部署」说明（文档）
+
+- 用户要求完善 README 说明**启用**（环境、大模型、运行）与**部署**（工作台 Web / 远程访问）方式，响应工作台（G4/GG6/CC）相继落地后文档落后于代码的现状。
+- **改动**（仅 `README.md`，未动 src/）：
+  1. 修正过时内容：LLM 行（未接入 → 现为 OpenAI 兼容端点，无密钥自动回退 dummy）、项目结构树（对齐 src/workbench/author_loop/retrieval 与 web/）、测试基线（250+ → **458 通过 + 1 跳过**）。
+  2. 新增 **启用**：venv+依赖（`docs/guides/development.md`）、LLM 配置（`config/system_config.yaml` `framework.llm=openai_compatible` + 火山方舟 base_url/model + `.env`/`DASHSCOPE_API_KEY`，无密钥回退 dummy）、测试（含 `LLM_E2E=1` 真实联调）、启动主流程（`run_novel.py` / `run_novel_with_author.py`）。
+  3. 新增 **部署**：本地仪表盘（`python -m web.api.server` / `uvicorn web.api.app`）；作者在环 `author_workbench.enabled` 开关语义；远程访问与鉴权（`config/web_api.yaml` `server.host` 0.0.0.0 + `auth.enabled` Basic Auth、空口令启动 fail-fast、公网建议反代/SSH 隧道、安全强化动机**放到最后** #31）；上下文压缩 CC-c 可配（默认关）。
+  4. 「如何开始」补一步：配好环境后本地先跑作者在环回合 + 开仪表盘，可离线验证。
+
+---
+
 ## 2026-08-31
 
 ### 全仓结构梳理 +「多视角独立演进 ⊕ 用户可调」方向对账（分析 / 文档）
