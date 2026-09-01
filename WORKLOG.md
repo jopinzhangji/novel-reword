@@ -52,6 +52,13 @@
 - **单测**：`test_session_runner_stream.py` 增 1 条——`run_fn` 抛 `EOFError` → `status=failed`、`error` 含字样、且终端 stream 尾部含「作者在环会话失败」行、离挂还原。全量 **465 通过 + 1 跳过**。
 - **实机验证**：重启服务后重开会话——不再 EOF，而是 `pending='是否保留现有设定？(y=…, 默认 y)'` 桥接前端；回 `y` 后推进至设计审阅 `(y/e/c/p)`，终端持续打印设定内容，正常作者在环。
 
+### 控制台回复输入被打掉修复（前端，2026-09-01）
+
+- **现象**：作者在环会话的回复框**输入即被清除**——打字后约 1 秒内内容消失。
+- **根因**：控制台 900ms 会话轮询每 tick 调 `renderSession()`，其整块重写 `sessionBox.innerHTML`，把回复 `<textarea id="replyInput">` 一并重建为空值；GG-W #6 把终端输出并入「随轮询刷新」与在环会话动态渲染叠加后暴露。
+- **修复**（`web/static/index.html`，纯前端）：`renderSession` 重写 innerHTML **前**缓存当前 `replyInput` 的 value/selectionStart/End/聚焦态，重绘后还原并恢复焦点——轮询刷新照常，不打断输入。`node --check` 通过；服务端按请求读磁盘，刷新浏览器即生效、无需重启。
+- 全量单测不受前端影响（465 passed + 1 skipped）。
+
 ---
 
 ## 2026-08-31
