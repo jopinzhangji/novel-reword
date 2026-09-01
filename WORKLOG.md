@@ -59,6 +59,16 @@
 - **修复**（`web/static/index.html`，纯前端）：`renderSession` 重写 innerHTML **前**缓存当前 `replyInput` 的 value/selectionStart/End/聚焦态，重绘后还原并恢复焦点——轮询刷新照常，不打断输入。`node --check` 通过；服务端按请求读磁盘，刷新浏览器即生效、无需重启。
 - 全量单测不受前端影响（465 passed + 1 skipped）。
 
+### 终端输出支持圈选复制（前端，2026-09-01）
+
+- **现象**：控制台终端输出（`<pre id="termBox">`）**无法选择/复制**。
+- **根因**：GG-W #6 终端随轮询 `term.textContent = stream.join("\\n")` **每 900ms 全量重写**文本节点，选区的锚点节点一旦被替换即被清掉——想圈一下就断。
+- **修复**（`web/static/index.html`，纯前端）：
+  - `.term` 显式 `user-select:text`（+`-webkit-`）允许圈选复制，不受他处 `user-select:none` 影响。
+  - 终端仅在内容**真正变长**才改写，且当用户**正在 termBox 内圈选/复制**（`mousedown`→`mouseup`/`copy` 窗口，或存在选区锚点落在 term 内）时**挂起**改写，不打断选区；`copy` 后解除。一次性挂监听（`data-copyBuilt` 防重复）。
+  - `node --check` 通过；服务按请求读磁盘，刷新浏览器即生效、无需重启。
+- 全量单测不受前端影响（465 passed + 1 skipped）。
+
 ---
 
 ## 2026-08-31

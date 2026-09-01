@@ -58,7 +58,7 @@
   .dimbtn.on { background:var(--acc); color:#fff; }
   .term { background:#20242a; color:#c8d2dd; font-family:ui-monospace,Menlo,Consolas,monospace;
           font-size:12px; line-height:1.5; padding:10px; border-radius:6px; max-height:420px;
-          overflow:auto; white-space:pre-wrap; }
+          overflow:auto; white-space:pre-wrap; user-select:text; -webkit-user-select:text; }
   .secsub { font-size:14px; margin:14px 0 8px; }
   .beathead { margin:6px 0; }
 </style>
@@ -506,8 +506,13 @@ function renderSession(s){
     if (!stream.length){
       term.textContent = s.status === "none" ? "（未开始作者在环会话，无终端输出）" : "（引擎处理中，暂无日志…）";
     } else {
-      term.textContent = stream.join("\n");
-      term.scrollTop = term.scrollHeight;   // 钉在最新
+      _termEnsureListeners(term);
+      // 仅真正变长才改写文本；且用户正在圈选/复制时不打断（否则轮询全量替换会清掉选区）
+      const txt = stream.join("\n");
+      if (term.textContent !== txt && !_termBusy(term)){
+        term.textContent = txt;
+        term.scrollTop = term.scrollHeight;   // 钉在最新
+      }
     }
   }
   startSessionPoll();
@@ -536,6 +541,24 @@ async function loadStory(){
   }).join("") + `</div>`;
 }
 
+// 终端输出可圈选/复制：用户在 termBox 内 mousedown 到 mouseup/复制 期间挂起轮询全量替换，
+// 避免上面 renderSession 的 textContent 改写把正在进行的选择清掉。
+let _termSecure = false;
+function _termBusy(term){
+  if (_termSecure) return true;
+  const sel = window.getSelection();
+  return !!sel && sel.rangeCount > 0 &&
+    ((sel.anchorNode && term.contains(sel.anchorNode)) || (sel.focusNode && term.contains(sel.focusNode)));
+}
+function _termEnsureListeners(term){
+  if (term.dataset.copyBuilt) return;
+  term.dataset.copyBuilt = "1";
+  const release = ()=>{ setTimeout(()=>{ _termSecure = false; }, 250); };
+  term.addEventListener("mousedown", ()=>{ _termSecure = true; });
+  term.addEventListener("mouseup", release);
+  term.addEventListener("selectstart", ()=>{ _termSecure = true; });
+  term.addEventListener("copy", ()=>{ _termSecure = false; });
+}
 async function startSession(){
   const r = await j(`/api/session`, { method:"POST",
     headers:{ "Content-Type":"application/json" },
