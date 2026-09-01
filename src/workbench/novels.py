@@ -15,6 +15,7 @@ from src.workbench.common import (
     scope_event_dirs,
 )
 from src.runtime.character_growth import load_growth_state
+from src.runtime.file_sync import load_scope_events_from_disk
 from src.runtime.outline_store import load_outline_snapshot, resolve_current_beat
 from src.runtime.relationship_graph import load_graph, relationship_graph_yaml_path
 
@@ -88,3 +89,34 @@ def index_novels(project_root: Path) -> list[dict]:
     for root in novel_roots(project_root):
         out.append(novel_summary(root))
     return out
+
+
+def story_events(novel_root: Path, scope_id: str = "main", limit: int = 20) -> dict:
+    """GG-W #6 小说正文情况：按 turn 倒序取 scope 事件 summary+body（确定性 read port）。
+
+    复用 `file_sync.load_scope_events_from_disk`（`## 正文` 段作 body）：真小说有正文，
+    测试/样例小说多只有摘要（body 空）。配 outline_pointer 作「当前位置」。不触碰正文磁盘。
+    """
+    events = load_scope_events_from_disk(novel_root, scope_id)
+    turn_dir = novel_root / "book" / "events" / scope_id / "events"
+    turns = sorted(
+        int(p.stem.replace("turn_", ""))
+        for p in turn_dir.glob("turn_*.md")
+    ) if turn_dir.is_dir() else []
+    rows = []
+    for i, ev in enumerate(events):
+        rows.append({
+            "turn": turns[i] if i < len(turns) else i + 1,
+            "summary": ev.get("summary", ""),
+            "body": ev.get("body", ""),
+            "time": ev.get("time", ""),
+            "place": ev.get("place", ""),
+            "present_characters": ev.get("present_characters", []),
+        })
+    rows.reverse()  # 最新在前
+    return {
+        "scope_id": scope_id,
+        "count": len(rows),
+        "events": rows[:limit],
+        "outline_pointer": _outline_pointer(novel_root),
+    }

@@ -11,13 +11,39 @@
 """
 from __future__ import annotations
 
+import logging
 import threading
+from collections import deque
 from pathlib import Path
 from typing import Callable
 
 from src.author_harness.workbench_ingress import WebInputAdapter
 
 RunFn = Callable[..., object]
+
+_MAX_STREAM_LINES = 300  # 会话期缓冲的引擎日志尾部行数上限
+
+
+class _StreamTailHandler(logging.Handler):
+    """只读日志尾部缓冲：把日志行压入定长 deque，供 `state()["stream"]` 展示。
+
+    挂到**根 logger**（覆盖 `src.*` 各模块 `logging.getLogger(__name__)` 的祖传传播路径），
+    纯内存、无磁盘；会话结束由 `WorkbenchSession` 负责移除（防泄漏）。
+    """
+
+    def __init__(self, max_lines: int = _MAX_STREAM_LINES) -> None:
+        super().__init__(level=logging.INFO)
+        self._lines: deque[str] = deque(maxlen=max_lines)
+        self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s", "%H:%M:%S"))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._lines.append(self.format(record))
+        except Exception:  # noqa: BLE001 — 观测 handler 绝不让日志自身抛错
+            self.handleError(record)
+
+    def lines(self) -> list[str]:
+        return list(self._lines)
 
 
 def _default_run_fn() -> RunFn:
@@ -37,11 +63,30 @@ class WorkbenchSession:
         self.status = "created"  # created | running | done | failed | aborted
         self.error: str | None = None
         self._thread: threading.Thread | None = None
+        # GG-W #6：会话期挂到根 logger 的日志尾部缓冲（只读观测，见 _StreamTailHandler）
+        self._stream_tail = _StreamTailHandler()
+        self._prev_root_level: int | None = None
+
+    def _attach_logger(self) -> None:
+        """挂根 logger 捕获引擎 INFO 日志尾部；根默认 WARNING 会滤掉 INFO，故临时抬到 INFO，
+        会话结束由 `_detach_logger` 还原。仅会话期内生效（显式开始 Session 才触发，default 不破）。"""
+        root = logging.getLogger()
+        self._prev_root_level = root.level
+        root.setLevel(logging.INFO)
+        root.addHandler(self._stream_tail)
+
+    def _detach_logger(self) -> None:
+        root = logging.getLogger()
+        root.removeHandler(self._stream_tail)  # 幂等：abort 与 _run_guard finally 可能都调
+        if self._prev_root_level is not None:
+            root.setLevel(self._prev_root_level)
+            self._prev_root_level = None
 
     def start(self) -> None:
         if self.status in ("running", "done", "failed", "aborted"):
             return
         self.status = "running"
+        self._attach_logger()
         self._thread = threading.Thread(
             target=self._run_guard, name=f"wbench-{self.slug}", daemon=True
         )
@@ -56,6 +101,8 @@ class WorkbenchSession:
             if self.status != "aborted":
                 self.status = "failed"
                 self.error = str(e)
+        finally:
+            self._detach_logger()
 
     # -- Web 线程入口 --
     def submit(self, text: str) -> None:
@@ -63,6 +110,7 @@ class WorkbenchSession:
 
     def abort(self) -> None:
         self.adapter.abort()
+        self._detach_logger()  # abort 即刻解除阻塞输入；日志尾部一并收口
         if self.status == "running":
             self.status = "aborted"
 
@@ -74,6 +122,8 @@ class WorkbenchSession:
             "status": self.status,
             "pending_prompt": self.adapter.pending_prompt,
             "error": self.error,
+            # GG-W #6：会话期缓冲的引擎日志尾部（只读观测；未捕获实时流式）
+            "stream": self._stream_tail.lines(),
         }
 
 

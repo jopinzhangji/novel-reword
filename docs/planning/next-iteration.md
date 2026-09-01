@@ -217,6 +217,7 @@
   - **#3 迁移日志时间线 ✅**（2026-08-31）：`characters.py::character_detail` 已含 `growth.transition_log` → 前端人物卡内按 turn 升序时间线展开（成长命中 `{rule,turn,scope_id,reason,deltas}` + guard 审计 `{rule,action,guard_reason}` 两类，guard 加「钳制/跳过」徽标），纯前端无新读口（D13 §6.6；全量回归保持绿）。
   - **#4 L1记忆 / 屏外线时间线 ✅**（2026-08-31）：`characters.py` 已含 `memories_l1`（`{turn_file,summary,layer}`）+ `off_screen_threads`（`{summary,thread?,turn_index?,scope_id?,consumed?}`）→ 前端人物卡分两节时间线（L1 按 turn_file 序 + layer 徽标；屏外 thread/turn/已消费·待消费徽标），`runtime_only_layers` 标注保留（D13 §6.6；全量回归保持绿）。
   - **#5 跨卡联动 ✅**（2026-08-31）：`focusPerson(id)` 共享焦点——点人物卡标题/关系节点 → 人物卡 `.focus` 高亮聚焦（其余 `.dim` 降强调度）+ `egoCenter` 心图跳到该角色；「全部角色」`clearFocus()` 复位全grid + 全书谱。作用域为**人物卡(成长/记忆/视野/屏外/雷达/时间线) ⇄ 关系图谱**（皆数据就绪的确定性 pane）；节拍为章节级场景数据、不按角色过滤（见 D13 §6.6 边界）。验收：单小说内点人物卡/节点即联动聚焦；全量回归保持绿。
+  - **#6 两栏布局 + 控制台终端输出 / 小说正文 ✅**（2026-09-01）：`web/static/index.html` 改**左导航维度 + 右内容**两栏（总览/进度/关系/人物/章节节拍/控制台/系统，懒加载、默认总览）；控制台维度右侧并入**终端输出**（`session_runner` 会话期给根 logger 挂 `_StreamTailHandler` 缓冲尾部行、`state().stream` 只读暴露，`_run_guard`/`abort` 移除——不改变在环/互斥语义）+ **小说正文**（`workbench/novels.py::story_events` 复用 `file_sync.load_scope_events_from_disk` 按 turn 倒序取 `summary+body`，`GET /api/novels/{slug}/story`）。诚实标注：**正文以 scope 事件 `## 正文` 段为准**，测试/样例小说多只有摘要（D13 §6.7）。验收：两栏切换只显示对应 pane、控制台含终端输出 + 正文；全量回归保持绿；详见 [novel-data-workbench.md §6.7](../design/novel-data-workbench.md)。
 - **大纲与节拍 + 主角正文轴 + 多线并行（分阶段落地）**：
   - **设计文档**：`docs/design/outline-and-beats.md`
   - **MVP 执行方案（三阶段细化 + SSOT + 验收）**：`docs/planning/outline-mvp-plan.md`

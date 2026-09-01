@@ -203,6 +203,16 @@ auth:
 - **边界（诚实）**：**节拍/情志条为章节级场景数据**（outline beat 无按角色在场指针），故不走人物焦点过滤；跨卡联动作用域为**人物卡(成长/记忆/视野/屏外/雷达/时间线) ⇄ 关系图谱**，皆数据就绪的确定性 pane。角色级节拍过滤需新增 beat→characters 读口，留后续。
 - **验收**：单小说内点人物卡/关系节点 → 对应卡高亮聚焦 + 心图跳到该角色；「全部角色」复位；全量回归保持绿。
 
+**#6 两栏布局 + 控制台终端输出 / 小说正文 ✅（2026-09-01，前端布局 + 确定性读口）**：
+- **动机**：工作台原先在选中一本小说后把 `进度/关系/人物/节拍/控制台/系统` **全部纵向堆叠**同时显示，靠整页滚动查看；用户要求改为**左导航栏列各维度、右侧呈现所选维度数据**的两栏布局，且**切到「控制台」时右侧同时呈现整体终端输出**与**小说正文情况**。
+- **前端布局（纯前端，无构建）**：`<main>` 改两栏 CSS grid——左**维度导航**（总览 / 进度 / 关系 / 人物 / 章节节拍 / **控制台** / 系统），右**内容区**仅渲染激活维度（`showDim` 切换、其余隐藏），**懒加载**（切维度才拉对应数据），默认激活「总览」。header 保留小说下拉与系统。
+- **控制台维度右侧三区**：① 作者在环 `sessionBox`（G4c 既有）② **终端输出**——渲染会话 `state().stream`（会话期缓冲的引擎日志尾部，见下）③ **小说正文情况**——`GET /api/novels/{slug}/story`，按 turn 陈列摘要 + 正文 body，顶部当前章/拍指针。
+- **后端（确定性、只读、无 LLM）**：
+  - **终端输出 tail（`session_runner.py`）**：`WorkbenchSession` 在 `start()` 时给**根 logger** 挂 `_StreamTailHandler`（定长 deque≈300 行，内存态），`_run_guard` finally / `abort()` 移除（防泄漏）；`state()` 增 `stream` 字段。**只读观测、不改变在环/互斥语义**——无会话时不挂、挂上也仅多一个 stream 字段。
+  - **小说正文 read port（`workbench/novels.py::story_events` + `routers/novels.py`）**：复用 `file_sync.load_scope_events_from_disk`，按 turn 倒序取 `summary + body`（`## 正文` 段），配 `outline_pointer` 作当前位置；不动正文磁盘。
+- **诚实标注**：**正文以 scope 事件 `## 正文` 段为准**；测试/样例小说多只有摘要（body 空），真小说才有正文章节。实时 LLM 流式/彩色终端不在本切片（会话期日志尾部概览已足）。
+- **验收**：`node --check` 抽 JS 通过；两栏布局切维度只显示对应 pane；控制台含终端输出（会话期日志尾部）+ 正文区（事件体/中文摘要）；`GET /api/novels/{slug}/story` 返回 body；无 LLM；全量回归保持绿。
+
 ---
 
 ## 7. 分阶段落地
@@ -215,7 +225,7 @@ auth:
 | **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） ✅（2026-08-31：`WebInputAdapter`/`LogOnlyAuthorIngress` + `WorkbenchSession`/`SessionRegistry` + `session.py` router（409 互斥 + pending/reply/abort/delete）；11 条单测，全量 **416 通过 + 1 跳过**） |
 | **GG5 `/system` 系统设置** | D9 §5.6 LLM（只读）/工作台互斥（可写）/联网（可写）面板 | 浏览器内读 effective 设置、改 `author_workbench.enabled` + `internet_search.*` 落 per-novel `config/runtime.yaml`；get_post_set_state；LLM 只读不破启动链；全量回归保持绿 ✅（2026-08-31：详见 §6.4） |
 | **GG6 远程访问与鉴权** | 可配监听（`config/web_api.yaml` server.host/port）+ 密码登录（Basic Auth，可开关） | `python -m web.api.server` 按配置监听；`auth.enabled=true` 全站 Basic Auth（默认关不破本地/单测）；空口令启动报错不裸奔；口令恒等比较；全量回归保持绿 ✅（2026-08-31：详见 §6.5） |
-| **GG-W 工作台面板补全** | #2 五维成长雷达（`growth_radar` 确定性打分 + 前端 SVG 雷达）→ #3 迁移日志时间线 → #4 L1记忆·屏外线时间线 → #5 跨卡联动 | 数据源复用 §4 确定性模块、纯前端渲染；default 不破；全量回归保持绿。**#2 ✅（2026-08-31：`character_detail` 增 `growth_radar`，`_GROWTH_DEPTH_SCALE=6` 截断，前端人物卡内嵌雷达）· #3 ✅（2026-08-31：人物卡增 `transition_log` turn 时间线）· #4 ✅（2026-08-31：人物卡增 L1 记忆 + 屏外线两节时间线）· #5 ✅（2026-08-31：`focusPerson` 跨卡联动——点人物卡/关系节点 → 人物卡高亮聚焦 + 心图跳该角色；详见 §6.6）** |
+| **GG-W 工作台面板补全** | #2 五维成长雷达（`growth_radar` 确定性打分 + 前端 SVG 雷达）→ #3 迁移日志时间线 → #4 L1记忆·屏外线时间线 → #5 跨卡联动 → #6 两栏布局 + 控制台终端输出 / 小说正文 | 数据源复用 §4 确定性模块、纯前端渲染；default 不破；全量回归保持绿。**#2 ✅（2026-08-31：`character_detail` 增 `growth_radar`，`_GROWTH_DEPTH_SCALE=6` 截断，前端人物卡内嵌雷达）· #3 ✅（2026-08-31：人物卡增 `transition_log` turn 时间线）· #4 ✅（2026-08-31：人物卡增 L1 记忆 + 屏外线两节时间线）· #5 ✅（2026-08-31：`focusPerson` 跨卡联动——点人物卡/关系节点 → 人物卡高亮聚焦 + 心图跳该角色；详见 §6.6）· #6 ✅（2026-09-01：左导航维度 + 右内容两栏；控制台并入终端输出 tail（会话期根 logger 缓冲）+ 小说正文事件体 read port；详见 §6.7）** |
 
 ---
 
@@ -240,3 +250,4 @@ auth:
 ## 10. 修订记录
 
 - **2026-08-31**：G4 SDD 初稿；登记 **D13**；承接 D9 壳与 G1/G2/G3 六类数据面；明确「多小说进度 ⇄ 数据图谱 ⇄ 作者控制台」三主线。
+- **2026-09-01**：增 **§6.7 #6**——两栏布局（左导航维度 + 右内容、懒加载）+ 控制台右侧并入**终端输出 tail**（`session_runner` 会话期根 logger 缓冲，内存态、只读）与**小说正文 read port**（`story_events` 复用 scope 事件 body）；§7 增 #6 行。

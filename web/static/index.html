@@ -47,20 +47,42 @@
   .tl-row { padding:4px 0; border-bottom:1px dashed var(--line); font-size:12px; }
   svg text { font-family:inherit; font-size:12px; fill:var(--ink); }
   .noseq { color:var(--mut); font-size:13px; }
+  /* GG-W #6：左导航维度 + 右内容两栏 */
+  .layout { display:grid; grid-template-columns:190px 1fr; gap:16px; align-items:start; }
+  .sidebar { position:sticky; top:12px; display:flex; flex-direction:column; gap:4px;
+             border-right:1px solid var(--line); padding-right:12px; align-self:start; }
+  .side-title { font-size:12px; color:var(--mut); margin-bottom:6px; }
+  .dimbtn { border:none; background:none; text-align:left; padding:8px 10px; border-radius:6px;
+            font:inherit; font-size:13px; cursor:pointer; color:var(--ink); }
+  .dimbtn:hover { background:#eef1f5; }
+  .dimbtn.on { background:var(--acc); color:#fff; }
+  .term { background:#20242a; color:#c8d2dd; font-family:ui-monospace,Menlo,Consolas,monospace;
+          font-size:12px; line-height:1.5; padding:10px; border-radius:6px; max-height:420px;
+          overflow:auto; white-space:pre-wrap; }
+  .secsub { font-size:14px; margin:14px 0 8px; }
+  .beathead { margin:6px 0; }
 </style>
 </head>
 <body>
 <header>
   <h1>Novel-Data 工作台</h1>
   <select id="novelSel" onchange="loadNovel()"><option value="">（加载中…）</option></select>
-  <button onclick="toggleSystem()" style="margin-left:8px">系统</button>
 </header>
-<main>
-  <h2 style="margin:4px 0 12px">作品进度总览</h2>
-  <div id="cards" class="noseq">…</div>
-
-  <section id="secSummary" hidden><h2>进度</h2><div id="summary"></div></section>
-  <section id="secGraph" hidden><h2>关系图谱</h2>
+<main class="layout">
+  <nav id="dims" class="sidebar" aria-label="维度导航">
+    <div class="side-title">维度</div>
+    <button class="dimbtn on" data-dim="overview" onclick="showDim('overview')">总览</button>
+    <button class="dimbtn" data-dim="summary" onclick="showDim('summary')">进度</button>
+    <button class="dimbtn" data-dim="graph" onclick="showDim('graph')">关系图谱</button>
+    <button class="dimbtn" data-dim="chars" onclick="showDim('chars')">人物情况</button>
+    <button class="dimbtn" data-dim="rhythm" onclick="showDim('rhythm')">章节 · 节拍</button>
+    <button class="dimbtn" data-dim="console" onclick="showDim('console')">控制台</button>
+    <button class="dimbtn" data-dim="system" onclick="showDim('system')">系统 / 联网</button>
+  </nav>
+  <div id="pane" class="pane">
+  <section id="secOverview" class="dimsec"><h2 style="margin:4px 0 12px">作品进度总览</h2><div id="cards" class="noseq">…</div></section>
+  <section id="secSummary" class="dimsec" hidden><h2>进度</h2><div id="summary"></div></section>
+  <section id="secGraph" class="dimsec" hidden><h2>关系图谱</h2>
     <div style="margin-bottom:8px">
       <input id="egoCenter" placeholder="心图中心角色 id" style="width:160px">
       <button onclick="loadGraph()">刷新 / 心图</button>
@@ -69,17 +91,22 @@
     </div>
     <div id="graph"></div>
   </section>
-  <section id="secChars" hidden><h2>人物情况</h2>
+  <section id="secChars" class="dimsec" hidden><h2>人物情况</h2>
     <div style="margin-bottom:8px"><span class="mut" id="focusBar">全部角色</span>
       <button onclick="clearFocus()" style="margin-left:8px" title="复位全部人物卡 + 全书谱">全部角色</button>
       <span class="mut" style="margin-left:8px">（点人物卡标题 / 关系图节点聚焦）</span></div>
     <div id="chars"></div></section>
-  <section id="secRhythm" hidden><h2>章节 · 节拍情志条</h2><div id="rhythm"></div></section>
-  <section id="secConsole" hidden><h2>作者控制台</h2>
+  <section id="secRhythm" class="dimsec" hidden><h2>章节 · 节拍情志条</h2><div id="rhythm"></div></section>
+  <section id="secConsole" class="dimsec" hidden><h2>作者控制台</h2>
     <div id="sessionBox" style="border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:6px"></div>
-    <div><h3 style="font-size:14px;margin:12px 0 8px">定制调整（能力 / 镜头 / 备选稿）</h3><div id="consoleBox"></div></div>
+    <div><h3 class="secsub">定制调整（能力 / 镜头 / 备选稿）</h3><div id="consoleBox"></div></div>
+    <h3 class="secsub">终端输出 <span class="mut" style="font-size:11px">（会话期引擎日志尾部，只读；实时流式留后续）</span></h3>
+    <pre id="termBox" class="term">（未开始作者在环会话，无终端输出）</pre>
+    <h3 class="secsub">小说正文情况 <span class="mut" style="font-size:11px">（scope 事件 `## 正文` 段；样例小说多为摘要）</span></h3>
+    <div id="storyBox"></div>
   </section>
-  <section id="secSystem" hidden><h2>系统设置（/system）</h2><div id="systemBox"></div></section>
+  <section id="secSystem" class="dimsec" hidden><h2>系统设置（/system）</h2><div id="systemBox"></div></section>
+  </div>
 </main>
 
 <script>
@@ -122,12 +149,32 @@ async function loadCards(){
 
 function pickNovel(slug){ el("novelSel").value = slug; loadNovel(); }
 
+/* GG-W #6：左导航维度 + 右内容（懒加载） */
+let activeDim = "overview";
+const DIMS = ["overview","summary","graph","chars","rhythm","console","system"];
+function dimSec(d){ return el(d === "overview" ? "secOverview" : "sec" + d[0].toUpperCase() + d.slice(1)); }
+
+async function runDim(name){
+  if (name === "summary"){ if(currentSlug) await loadSummary(); }
+  else if (name === "graph"){ if(currentSlug) await loadGraph(); }
+  else if (name === "chars"){ if(currentSlug) await loadChars(); }
+  else if (name === "rhythm"){ if(currentSlug) await loadRhythm(); }
+  else if (name === "console"){ if(currentSlug){ await loadConsole(); await loadStory(); await loadSession(); } }
+  else if (name === "system"){ await loadSystem(); }
+}
+
+function showDim(name){
+  activeDim = name;
+  document.querySelectorAll(".dimbtn").forEach(b => b.classList.toggle("on", b.dataset.dim === name));
+  DIMS.forEach(d => { dimSec(d).hidden = (d !== name); });
+  if (name !== "console") stopSessionPoll();   // 仅控制台激活才轮询会话
+  runDim(name);
+}
+
 async function loadNovel(){
   currentSlug = el("novelSel").value;
   if (!currentSlug) return;
-  ["secSummary","secGraph","secChars","secRhythm","secConsole"].forEach(id => el(id).hidden = false);
-  await loadSummary(); await loadGraph(); await loadChars(); await loadRhythm(); await loadConsole();
-  await loadSession();
+  runDim(activeDim);   // 懒加载当前维度
 }
 
 async function loadSummary(){
@@ -395,6 +442,7 @@ async function loadSession(){
 }
 
 function startSessionPoll(){
+  if (activeDim !== "console") return;   // GG-W #6：仅控制台维度激活时轮询
   if (sessionTimer) return;
   sessionTimer = setInterval(pollSession, 900);
 }
@@ -437,7 +485,41 @@ function renderSession(s){
       ${st === "running" ? `<button onclick="abortSession()">中止</button>` : ""}
       <button onclick="endSession()">结束并清理</button>
     </div></div>`;
+  // GG-W #6：终端输出（会话期日志尾部）随轮询刷新
+  const stream = s.stream && Array.isArray(s.stream) ? s.stream : [];
+  const term = el("termBox");
+  if (term){
+    if (!stream.length){
+      term.textContent = s.status === "none" ? "（未开始作者在环会话，无终端输出）" : "（引擎处理中，暂无日志…）";
+    } else {
+      term.textContent = stream.join("\n");
+      term.scrollTop = term.scrollHeight;   // 钉在最新
+    }
+  }
   startSessionPoll();
+}
+
+async function loadStory(){
+  if (!currentSlug){ el("storyBox").innerHTML = `<span class="noseq">请先选择一部小说。</span>`; return; }
+  let st;
+  try { st = await j(`/api/novels/${currentSlug}/story?scope=main&limit=20`); }
+  catch(e){ el("storyBox").innerHTML = `<span class="noseq">读取正文失败：${esc(e.message)}</span>`; return; }
+  const p = st.outline_pointer || {};
+  const head = p.had_any_beat
+    ? `<div class="mut" class="beathead">当前位置：<b>${esc(p.chapter_title||"—")}</b> · ${esc(p.beat_intent||"—")}（回合 ${p.turns_in_beat ?? "—"}）</div>`
+    : "";
+  const evs = st.events || [];
+  if (!evs.length){ el("storyBox").innerHTML = head + `<span class="noseq">该 scope 暂无事件 / 正文。</span>`; return; }
+  el("storyBox").innerHTML = head + `<div class="tl">` + evs.map(e => {
+    const meta = [e.time, e.place].filter(Boolean).map(esc).join(" · ");
+    const chars = (e.present_characters||[]).length ? `<span class="tag">在场 ${esc((e.present_characters||[]).join(","))}</span>` : "";
+    const body = (e.body || "").trim();
+    const txt = (body || e.summary || "").trim();
+    const bodyHtml = txt
+      ? `<div class="mut" style="white-space:pre-wrap;font-size:12px;margin-top:4px">${esc(txt.slice(0,600))}${txt.length>600?"…":""}</div>`
+      : `<div class="mut" style="font-size:12px;margin-top:4px">（无正文 / 摘要）</div>`;
+    return `<div class="tl-row"><div><b style="color:var(--acc)">#${esc(String(e.turn))}</b> ${meta ? `<span class="mut">${meta}</span>` : ""} ${chars}</div>${bodyHtml}</div>`;
+  }).join("") + `</div>`;
 }
 
 async function startSession(){
@@ -501,12 +583,6 @@ async function patchSystem(payload){
   await j("/api/system", { method:"PATCH", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
   await loadSystem();
 }
-function toggleSystem(){
-  const section = el("secSystem");
-  if (section.hidden){ section.hidden = false; loadSystem(); }
-  else { section.hidden = true; }
-}
-
 loadCards();
 </script>
 </body>
