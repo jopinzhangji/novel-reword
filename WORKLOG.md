@@ -69,6 +69,13 @@
   - `node --check` 通过；服务按请求读磁盘，刷新浏览器即生效、无需重启。
 - 全量单测不受前端影响（465 passed + 1 skipped）。
 
+### 工作台接入 .env 大模型密钥（web 服务进程读 DASHSCOPE_API_KEY，2026-09-01）
+
+- **现象**：工作台「控制台」跑作者在环，终端打 `获取 LLM Provider 失败: 未设置环境变量 DASHSCOPE_API_KEY`——即便仓库根 `.env` 已配好密钥。CLI 文档「.env 配置大模型密钥」约定对 web 服务进程**未落地**（全仓无 dotenv 载入）。
+- **修复**（`web/api/server.py`，仅 `python -m web.api.server` 入口）：启动时 `load_env_dotfile(root)` 读项目根 `.env`——纯 `K=V` 解析、无第三方依赖，`os.environ.setdefault`（**显式 shell 环境优先、不覆盖**；注释/空行/空值跳过；读取失败不阻断起服务；不向终端回显值）。tests 走 `create_app` 不经此入口，保持 hermetic。
+- **单测 +3**（`test_web_security.py`）：setdefault 载入基本值、注释/空行/空值跳过、不覆盖已设 shell 变量、无文件/幂等。全量 **468 通过 + 1 跳过**。
+- **实机验证**：重启服务（pid 840311）后开会话，`LLM 配置: framework.llm=openai_compatible, Provider=QuotaAwareLLMProvider`、无「未设置环境变量」警告——.env 密钥生效，工作台用真实 LLM。
+
 ---
 
 ## 2026-08-31

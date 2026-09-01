@@ -8,6 +8,7 @@
 无 fastapi 环境整模块跳过（importorskip），核心 pytest 不受影响。
 """
 import base64
+import os
 
 import pytest
 
@@ -123,3 +124,38 @@ def test_create_app_auth_empty_fails_fast(project):
     _web_config(project, enabled=True, username="", password="s3cret")
     with pytest.raises(ValueError):
         create_app(project)  # 空口令 → install_auth fail-fast，不静默无鉴权
+
+
+# --- server.py 的 .env 载入（工作台服务进程读真实 LLM 密钥；setdefault 不覆盖显式环境） ---
+
+
+def test_load_env_dotfile_sets_and_skips(tmp_path, monkeypatch):
+    from web.api.server import load_env_dotfile
+
+    monkeypatch.delenv("NOVEL_TEST_DOT_A", raising=False)
+    monkeypatch.delenv("NOVEL_TEST_DOT_B", raising=False)
+    mic = tmp_path / ".env"
+    mic.write_text(
+        "# 注释行\nNOVEL_TEST_DOT_A=aaa\n\nNOVEL_TEST_DOT_B=bbb\nNOVEL_TEST_DOT_C=\n",
+        encoding="utf-8",
+    )
+    load_env_dotfile(tmp_path)
+    assert os.environ.get("NOVEL_TEST_DOT_A") == "aaa"
+    assert os.environ.get("NOVEL_TEST_DOT_B") == "bbb"
+    assert os.environ.get("NOVEL_TEST_DOT_C") is None  # 空值不回填
+
+
+def test_load_env_dotfile_does_not_override_existing(tmp_path, monkeypatch):
+    from web.api.server import load_env_dotfile
+
+    monkeypatch.setenv("NOVEL_TEST_DOT_A", "shell-value")  # 显式 shell 已设
+    (tmp_path / ".env").write_text("NOVEL_TEST_DOT_A=dotfile-value\n", encoding="utf-8")
+    load_env_dotfile(tmp_path)
+    assert os.environ.get("NOVEL_TEST_DOT_A") == "shell-value"  # setdefault：shell 优先
+
+
+def test_load_env_dotfile_no_file_and_garbage(tmp_path, monkeypatch):
+    from web.api.server import load_env_dotfile
+
+    load_env_dotfile(tmp_path)  # 无 .env → 静默返回不抛
+    load_env_dotfile(tmp_path)  # 幂等

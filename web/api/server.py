@@ -9,6 +9,7 @@ auth.enabled=true 且空口令 → 启动即报错（fail-fast，不静默无鉴
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -22,11 +23,34 @@ def _project_root() -> Path:
         return Path(__file__).resolve().parents[2]
 
 
+def load_env_dotfile(root: Path) -> None:
+    """服务进程启动时把项目根 .env 读入 os.environ（仅在未显式设置时 setdefault）。
+
+    与 CLI 文档「.env 配置大模型密钥」的约定对齐：无依赖、纯 `K=V` 解析，
+    隐式 shell 环境优先（不动已在环境里的值），不向终端回显值。
+    """
+    dotfile = root / ".env"
+    if not dotfile.is_file():
+        return
+    try:
+        for raw in dotfile.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            if key and value:
+                os.environ.setdefault(key, value.strip())
+    except OSError:  # noqa: BLE001 — .env 读取失败不阻断起服务
+        return
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Novel-Data Workbench web server")
     parser.add_argument("--root", default=None, help="项目根（默认仓库根）")
     args = parser.parse_args()
     root = Path(args.root) if args.root else _project_root()
+    load_env_dotfile(root)  # 读项目根 .env（DASHSCOPE_API_KEY 等），使工作台用真实 LLM
 
     from web.api.app import create_app
     from web.api.security import load_web_settings, validate_auth_settings
