@@ -147,9 +147,14 @@ Session `pending_prompt` → 前端输入 → `WebInputAdapter` → 既有回环
 |----|------------------|----|----|
 | **工作台互斥** | `runtime.runtime.author_workbench.enabled` | ✔ | ✔ 布尔开关（`author_workbench_enabled`） |
 | **联网检索** | `runtime.runtime.author_harness.internet_search`（enabled/provider/max_chars/trust_level） | ✔ | ✔ 白名单四键 |
-| **LLM 提供方** | `framework.llm` + `framework.llm_options`（openai_compatible/火山方舟） | ✔ 只读展示 | ✘ **v1 只读**——真实提供方由环境 `.env`/密钥驱动（见 [LLM_AND_AGENT_DESIGN.md](../../docs/LLM_AND_AGENT_DESIGN.md)），运行时中途改提供方易断链，故仅展示不写 |
+| **LLM 提供方（工作参数）** | `framework.llm` + `framework.llm_options`（openai_compatible/火山方舟） | ✔ 读写 | ✔ **白名单五子键**（v2）：`model` / `base_url` / `timeout` / `max_retries` / `api_key_env`（见下 ⚠） |
+| **LLM 提供方（provider 类型）** | `framework.llm`（`dummy`/`openai_compatible`/…） | ✔ 只读展示 | ✘ **只读**——真实提供方由环境 `.env`/密钥驱动（见 [LLM_AND_AGENT_DESIGN.md](../../docs/LLM_AND_AGENT_DESIGN.md)），运行时中途改 provider 类型易断链，故类型本身仍只读不改写 |
 
-**持久化写口**：与 G3 features.yaml 同构——写 **per-novel** `data/novels/<slug>/config/runtime.yaml`（顶层 `runtime:` 下 `author_workbench`/`author_harness.internet_search`），`load_runtime_config` 的 per-novel `deep_merge` 覆盖即可生效。**只写白名单键、合并保留既有键**（如 e2e 的 `runtime.novel_run`），**不动 `config/*.yaml` canonical 文件**；删除该 override 键即回默认。**生效边界**：设置由 `load_runtime_config` 在 `run_novel_with_author.main` 启动时快照 → 改后**下一会话/重启生效**，不逐回合热改（诚实标注，不假装即时生效）。LLM 只读 + 工作台/联网可写的默认取舍，避免破启动链。
+**持久化写口**：与 G3 features.yaml 同构——写 **per-novel** `data/novels/<slug>/config/runtime.yaml`，`load_runtime_config` 的 per-novel `deep_merge` 覆盖即可生效。**只写白名单键、合并保留既有键**（如 e2e 的 `runtime.novel_run`），**不动 `config/*.yaml` canonical 文件**；删除该 override 键即回默认。
+- **运行时组**（`author_workbench` / `author_harness.internet_search`）写 **顶层 `runtime:`** 下（沿用 G3/G4c）。
+- **LLM 工作参数组**（`framework.llm_options`）写 **顶层 `framework:`** 下——**区别于运行时组的 `runtime:` 包装**，因为 `_framework_info`/`load_runtime_config` 读的是 **top-level `framework`**（e2e per-novel `runtime.yaml` 顶层为 `setting_research/agents/runtime`，本就无 `runtime:` 外层 wrapper）。merge：`model`/`base_url`/`timeout`/`max_retries`/`api_key_env` 逐个深合并进 `framework.llm_options`，**保留既有 `framework.llm` 与其它 llm_options**。
+
+**生效边界**：设置由 `load_runtime_config` 在 `run_novel_with_author.main` 启动时快照 → 改后**下一会话/重启生效**，不逐回合热改（诚实标注，不假装即时生效）。⚠ `api_key_env` 写的是**环境变量名**（非密钥明文，key 本身仍只读展示）；改后须确保该环境变量在 `.env`/shell 中已提供，否则下一会话真实 LLM 会断链——文档如实提示，不静默兜底。
 
 **前端**：静态面板 `web/static/index.html`「系统」分区——按钮切换显示，GET `/api/system` 渲染（当前书/LLM 只读卡/workbench 开关/internet 开关+provider+max_chars+trust_level），任一改动作 PATCH 后 GET 刷新。
 
@@ -213,6 +218,24 @@ auth:
 - **诚实标注**：**正文以 scope 事件 `## 正文` 段为准**；测试/样例小说多只有摘要（body 空），真小说才有正文章节。实时 LLM 流式/彩色终端不在本切片（会话期日志尾部概览已足）。
 - **验收**：`node --check` 抽 JS 通过；两栏布局切维度只显示对应 pane；控制台含终端输出（会话期日志尾部）+ 正文区（事件体/中文摘要）；`GET /api/novels/{slug}/story` 返回 body；无 LLM；全量回归保持绿。
 
+### 6.8 在线书名编辑 + LLM 工作参数可写（2026-09-06）
+
+用户要求：**「（初稿）待命名」的小说可以在工作台在线命名**；**对应系统配置（LLM 工作参数）也可以在线修改**。承 §6.4（LLM 白名单）+ §4 作品索引。
+
+**① 在线书名编辑（rename，确定性写口）**：
+
+- `src/workbench/novels.py::rename_novel(project_root, slug, title)`——校验书名非空；`slugify_title(title)` 生成新 slug，目录名冲突递增后缀；目录重命名（`novel_root.rename`）后同步写三处：
+  - `meta.yaml`：`title` + `slug`（status 不变，draft 仍是 draft）；
+  - `data/novels/index.yaml`：按**旧 slug** 移除旧行、按新 slug 追加 `{slug,title,status,updated_at}`；
+  - `config/current_novel.yaml`（仓库级）：若指针指向该 slug/root 则更新 `slug/title/root`（`provisional=False`）。
+- 复用 `novel_identity.slugify_title`，与主流程命名口径一致；**只改身份元数据，不触碰 `book/`/`config/*.yaml` 写作产物**。
+- `web/api/routers/novels.py`：新增 `PATCH /api/novels/{slug}/rename`（body `{title}`），校验后返回新 `{slug, title, root}`。
+- **前端**：总览/进度页当前书名词条内嵌可编辑输入 + 保存；保存后提示并重载作品索引（slug 可能因命名变化）。
+
+**② LLM 工作参数可写（白名单，v2 取代 v1 只读）**：见 §6.4 表 + 写口。仍**保持 `framework.readonly=false`**，但**提供方类型（`framework.llm`）与密钥值本身仍只读**——Web 层返回 `options` 中 `model/base_url/timeout/max_retries/api_key_env` 可写字段，PATCH `/api/system` 传 `{"framework": {...}}` 落 top-level `framework.llm_options`。
+
+- **验收**：`PATCH /api/novels/{slug}/rename` 改书名真实落盘 meta/index/current_novel，slug 变化时目录改名；`system_status` 的 `framework.readonly=false`；`PATCH /api/system`（`framework`）落 per-novel `runtime.yaml` 顶层 `framework.llm_options` 且保留既有 `framework.llm`；无 LLM、无真实密钥写盘；全量回归保持绿。
+
 ---
 
 ## 7. 分阶段落地
@@ -223,7 +246,7 @@ auth:
 | **G4a 后端 Read Api**（首选可交付） | `novels`/`graph`/`characters`/`outline`/`console` Read 与写口（全委托既有模块） | 单测全绿；无 LLM；多小说/单小说/控制台三类断言 ✅（2026-08-31：`src/workbench/` 服务层 20 单测 + 全量 **395 通过 + 1 跳过**；FastAPI router 留 G4b 薄包装） |
 | **G4b 前端壳 + 图谱页** | 承接 D9 W1–W2；顶置作品索引 + 各数据图谱组件（力导/雷达/时间线/节拍条/信息视野） | 浏览器可查看多小说进度与单小说六类图谱（读 G4a） ✅（2026-08-31：`web/api/app.py` FastAPI 工厂 + 五 router 薄包装 `src/workbench/` + `web/static/index.html` 无构建静态仪表盘；10 条 TestClient 单测，全量 **405 通过 + 1 跳过**；React/Vite 前端仍留 W 系列替换静态页） |
 | **G4c 作者控制台** | 定制调整（能力/镜头/备选稿）写口 + Session 作者在环（W3–W4） | 浏览器内改能力/切镜头/升备选稿生效；作者自由输入回合审阅；**互斥：`author_workbench.enabled=true` 时终端不弹作者菜单、不读 stdin，交互只在前端**（G3/大纲推进/审阅 prompt 全走前端） ✅（2026-08-31：`WebInputAdapter`/`LogOnlyAuthorIngress` + `WorkbenchSession`/`SessionRegistry` + `session.py` router（409 互斥 + pending/reply/abort/delete）；11 条单测，全量 **416 通过 + 1 跳过**） |
-| **GG5 `/system` 系统设置** | D9 §5.6 LLM（只读）/工作台互斥（可写）/联网（可写）面板 | 浏览器内读 effective 设置、改 `author_workbench.enabled` + `internet_search.*` 落 per-novel `config/runtime.yaml`；get_post_set_state；LLM 只读不破启动链；全量回归保持绿 ✅（2026-08-31：详见 §6.4） |
+| **GG5 `/system` 系统设置** | D9 §5.6 LLM/工作台互斥/联网面板 | 浏览器内读 effective 设置、改 `author_workbench.enabled` + `internet_search.*` + **LLM 工作参数白名单五子键（v2）** 落 per-novel `config/runtime.yaml`；get_post_set_state；provider 类型/密钥值仍只读不破启动链；全量回归保持绿 ✅（2026-08-31 §6.4；**2026-09-06 §6.8：LLM model/base_url/timeout/max_retries/api_key_env 可写，落 top-level `framework`**） |
 | **GG6 远程访问与鉴权** | 可配监听（`config/web_api.yaml` server.host/port）+ 密码登录（Basic Auth，可开关） | `python -m web.api.server` 按配置监听；`auth.enabled=true` 全站 Basic Auth（默认关不破本地/单测）；空口令启动报错不裸奔；口令恒等比较；全量回归保持绿 ✅（2026-08-31：详见 §6.5） |
 | **GG-W 工作台面板补全** | #2 五维成长雷达（`growth_radar` 确定性打分 + 前端 SVG 雷达）→ #3 迁移日志时间线 → #4 L1记忆·屏外线时间线 → #5 跨卡联动 → #6 两栏布局 + 控制台终端输出 / 小说正文 | 数据源复用 §4 确定性模块、纯前端渲染；default 不破；全量回归保持绿。**#2 ✅（2026-08-31：`character_detail` 增 `growth_radar`，`_GROWTH_DEPTH_SCALE=6` 截断，前端人物卡内嵌雷达）· #3 ✅（2026-08-31：人物卡增 `transition_log` turn 时间线）· #4 ✅（2026-08-31：人物卡增 L1 记忆 + 屏外线两节时间线）· #5 ✅（2026-08-31：`focusPerson` 跨卡联动——点人物卡/关系节点 → 人物卡高亮聚焦 + 心图跳该角色；详见 §6.6）· #6 ✅（2026-09-01：左导航维度 + 右内容两栏；控制台并入终端输出 tail（会话期根 logger 缓冲）+ 小说正文事件体 read port；详见 §6.7）** |
 
@@ -251,3 +274,4 @@ auth:
 
 - **2026-08-31**：G4 SDD 初稿；登记 **D13**；承接 D9 壳与 G1/G2/G3 六类数据面；明确「多小说进度 ⇄ 数据图谱 ⇄ 作者控制台」三主线。
 - **2026-09-01**：增 **§6.7 #6**——两栏布局（左导航维度 + 右内容、懒加载）+ 控制台右侧并入**终端输出 tail**（`session_runner` 会话期根 logger 缓冲，内存态、只读）与**小说正文 read port**（`story_events` 复用 scope 事件 body）；§7 增 #6 行。
+- **2026-09-06**：§6.4 LLM 行升 **v2 工作参数白名单可写**（`model`/`base_url`/`timeout`/`max_retries`/`api_key_env`，写 top-level `framework.llm_options`；provider 类型与密钥值仍只读）；增 **§6.8 在线书名编辑**（`rename_novel` 落 meta/index/current_novel，slug 变化时目录改名）；§7 GG5 行补可写项。

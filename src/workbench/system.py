@@ -1,12 +1,14 @@
 """G4c+/system 系统设置（SDD D13 §6.4 · GG5）。
 
-读：effective LLM（只读展示）/ 工作台互斥 / 联网检索 三组，取自 `load_runtime_config`
+读：effective LLM（v2 工作参数可写）/ 工作台互斥 / 联网检索 三组，取自 `load_runtime_config`
 （已含 per-novel `config/runtime.yaml` 覆盖）。
-写：白名单键落 **per-novel** `data/novels/<slug>/config/runtime.yaml`（顶层 `runtime:` 下
-`author_workbench` / `author_harness.internet_search`）——与 G3 features.yaml 同构的安全
-覆盖，合并保留既有键、不动 `config/*.yaml` canonical；改后下一会话生效。
+写：白名单键落 **per-novel** `data/novels/<slug>/config/runtime.yaml`——运行时组（顶层
+`runtime:` 下 `author_workbench` / `author_harness.internet_search`）与 LLM 组（**顶层
+`framework.llm_options`**，因 `_framework_info` 读 top-level `framework`，区别于运行时组的
+`runtime:` 包装）——合并保留既有键、不动 `config/*.yaml` canonical；改后下一会话生效。
 
-LLM 提供方 **v1 只读**（真实提供方由 .env/密钥驱动，中途改易断链），仅展示不写。
+LLM：**v2 工作参数可写**（`model`/`base_url`/`timeout`/`max_retries`/`api_key_env`）；
+提供方类型（`framework.llm`）与密钥值本身仍只读（展示不写）。
 确定性、无 LLM；写口全走白名单校验。
 """
 from __future__ import annotations
@@ -30,6 +32,9 @@ _INTERNET_SUBKEYS = {
     "trust_level": str,
 }
 
+# 白名单：LLM 工作参数可写子键 ↔ 顶层 .framework.llm_options.<sub>（v2）
+_LLM_WRITABLE_SUBS = ("model", "base_url", "timeout", "max_retries", "api_key_env")
+
 # LLM 展示用的敏感键不外漏（暴露 key/env 名即可，不返回密钥值）
 _LLM_DISPLAY_KEYS = ("model", "base_url", "timeout", "max_retries")
 
@@ -45,6 +50,15 @@ def _nested_set(data: dict, path: tuple[str, ...], value: Any) -> None:
     cur[path[-1]] = value
 
 
+def _merge_patch(target: dict, patch: dict) -> None:
+    """把补丁深合并进 target：dict 递归、标量/其它替换。保既有键。"""
+    for k, v in patch.items():
+        if isinstance(v, dict) and isinstance(target.get(k), dict):
+            _merge_patch(target[k], v)
+        else:
+            target[k] = v
+
+
 def _framework_info(runtime_config: dict) -> dict:
     fw = runtime_config.get("framework") or {}
     if not isinstance(fw, dict):
@@ -57,8 +71,10 @@ def _framework_info(runtime_config: dict) -> dict:
         "llm": fw.get("llm") or "dummy",
         "api_key_env": api_key_env,
         "options": display,
-        "readonly": True,  # v1 只读展示，不破启动链
-        "note": "v1 只读：LLM 提供方由环境密钥驱动，运行时中途改提供方易断链。",
+        "writable": list(_LLM_WRITABLE_SUBS),  # v2 白名单工作参数（含 api_key_env）
+        "readonly": False,
+        "note": "v2 可写：model/base_url/timeout/max_retries/api_key_env（白名单）；"
+        "提供方类型与密钥值仍只读，改后下一会话生效。",
     }
 
 
@@ -110,9 +126,7 @@ def system_status(project_root: Path | str) -> dict:
     return _status_from(project_root, current_novel_root(project_root / "config"))
 
 
-def _write_override(novel_root: Path, runtime_patch: dict) -> Path:
-    """把 `runtime:` 顶层补丁并进 per-novel config/runtime.yaml（合并保留既有键）。"""
-    path = novel_root / "config" / "runtime.yaml"
+def _load_override(path: Path) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     data: dict = {}
     if path.is_file():
@@ -122,17 +136,42 @@ def _write_override(novel_root: Path, runtime_patch: dict) -> Path:
                 data = existing
         except yaml.YAMLError:
             data = {}
-    patch = {"runtime": runtime_patch}
-    # 释放顶层：把既有 runtime 片段与新 runtime_patch 按键合并（白名单键覆盖，其余保留）
+    return data
+
+
+def _write_override(novel_root: Path, runtime_patch: dict) -> Path:
+    """把 `runtime:` 顶层补丁并进 per-novel config/runtime.yaml（深合并保留既有键）。"""
+    path = novel_root / "config" / "runtime.yaml"
+    data = _load_override(path)
     merged = data.setdefault("runtime", {})
     if not isinstance(merged, dict):
         merged = {}
         data["runtime"] = merged
-    for k, v in runtime_patch.items():
-        if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
-            merged[k] = {**merged[k], **v}
-        else:
-            merged[k] = v
+    _merge_patch(merged, runtime_patch)
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+    return path
+
+
+def _write_framework_override(novel_root: Path, llm_patch: dict) -> Path:
+    """LLM 工作参数补丁并进 per-novel config/runtime.yaml 的 **顶层 `framework`**。
+
+    与 `_write_override`（运行时组 `runtime:` 包装）关键差异：`_framework_info`/
+    `load_runtime_config` 读的是 **top-level `framework`**，故 framework 覆盖写顶层，
+    不套 `runtime:`。深合并保留既有 `framework.llm` 与其它 llm_options。
+    """
+    path = novel_root / "config" / "runtime.yaml"
+    data = _load_override(path)
+    fw = data.setdefault("framework", {})
+    if not isinstance(fw, dict):
+        fw = {}
+        data["framework"] = fw
+    opts = fw.setdefault("llm_options", {})
+    if not isinstance(opts, dict):
+        opts = {}
+        fw["llm_options"] = opts
+    _merge_patch(opts, llm_patch)
     path.write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
     )
@@ -147,7 +186,8 @@ def patch_system(project_root: Path | str, patch: dict) -> dict:
       - internet_search: dict                     → runtime.author_harness.internet_search.<sub>
         可写子键：enabled(bool) / provider(str) /
                   max_chars(int, 200..8000) / trust_level(str in {low,mid,high})
-    framework（LLM）v1 只读：传入即忽略（不写），保持不破启动链。
+    framework（LLM）**v2 工作参数可写**（白名单）→ 顶层 `framework.llm_options.<sub>`；
+    提供方类型与密钥值不在白名单内（传 `framework.llm` 之类非白名单键即忽略）。
     """
     project_root = Path(project_root)
     novel_root = current_novel_root(project_root / "config")
@@ -188,5 +228,29 @@ def patch_system(project_root: Path | str, patch: dict) -> dict:
             is_cur[sub] = val
         runtime_patch["author_harness"] = {"internet_search": dict(is_cur)}
 
-    _write_override(novel_root, runtime_patch)
+    if runtime_patch:
+        _write_override(novel_root, runtime_patch)
+
+    fw_patch = patch.get("framework")
+    if fw_patch is not None:
+        if not isinstance(fw_patch, dict):
+            raise ValueError("framework 必须是 dict")
+        llm_patch: dict[str, Any] = {}
+        for sub in _LLM_WRITABLE_SUBS:
+            if sub not in fw_patch:
+                continue
+            val = fw_patch[sub]
+            if sub in ("model", "base_url", "api_key_env"):
+                if not isinstance(val, str) or not val.strip():
+                    raise ValueError(f"framework.{sub} 须为非空字符串")
+            elif sub == "timeout":
+                if isinstance(val, bool) or not isinstance(val, (int, float)) or not (1 <= val <= 300):
+                    raise ValueError("framework.timeout 须为 1..300 的秒数")
+            elif sub == "max_retries":
+                if isinstance(val, bool) or not isinstance(val, int) or not (0 <= val <= 10):
+                    raise ValueError("framework.max_retries 须为 0..10 的整数")
+            llm_patch[sub] = val
+        if llm_patch:
+            _write_framework_override(novel_root, llm_patch)
+
     return _status_from(project_root, novel_root)

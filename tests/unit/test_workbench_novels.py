@@ -93,3 +93,61 @@ def test_story_events_empty_no_dir(tmp_path):
     proj, roots = make_project(tmp_path, ("alpha",))
     r = novels.story_events(roots["alpha"])
     assert r["events"] == [] and r["outline_pointer"] == {}
+
+# --- D13 §6.8：在线书名编辑（rename_novel）— 只动身份元数据、slug 变化目录改名 ---
+def _current_novel(proj, slug):
+    from tests.unit.workbench_support import write_yaml
+
+    write_yaml(
+        Path(proj) / "config" / "current_novel.yaml",
+        {"slug": slug, "title": "旧名", "root": str(Path(proj) / "data" / "novels" / slug), "provisional": True},
+    )
+
+
+def test_rename_updates_meta_idx_current(tmp_path):
+    proj, roots = make_project(tmp_path, ("alpha",))
+    write_index(proj, ("alpha",))
+    _current_novel(proj, "alpha")
+    out = novels.rename_novel(proj, "alpha", "重生之在天界")
+    assert out["title"] == "重生之在天界"
+    assert out["slug"] == "重生之在天界"
+    # 目录改名
+    assert (proj / "data" / "novels" / "重生之在天界").is_dir()
+    assert not (proj / "data" / "novels" / "alpha").exists()
+    # meta 更新（status 仍 draft）
+    meta = novels.novel_meta(Path(proj) / "data" / "novels" / "重生之在天界")
+    assert meta["slug"] == "重生之在天界" and meta["title"] == "重生之在天界" and meta["status"] == "draft"
+    # index 去旧行加新行
+    items = novels.index_novels(proj)
+    assert [i["slug"] for i in items] == ["重生之在天界"]
+    # current_novel 指针更新
+    import yaml
+
+    cur = yaml.safe_load((proj / "config" / "current_novel.yaml").read_text(encoding="utf-8"))
+    assert cur["slug"] == "重生之在天界" and cur["title"] == "重生之在天界" and cur["provisional"] is False
+
+
+def test_rename_empty_title_rejected(tmp_path):
+    proj, roots = make_project(tmp_path, ("alpha",))
+    import pytest
+
+    with pytest.raises(ValueError):
+        novels.rename_novel(proj, "alpha", "   ")
+
+
+def test_rename_slug_collision_appends_suffix(tmp_path):
+    proj, roots = make_project(tmp_path, ("alpha", "beta"))
+    write_index(proj, ("alpha", "beta"))
+    # beta 目录已占位，但重命名到与 beta 不同 slug 才触发碰撞建立在「目标已存在」上
+    out = novels.rename_novel(proj, "alpha", "beta")
+    assert out["slug"].startswith("beta-")  # 目标 beta 已存在 → 递增后缀
+    assert (proj / "data" / "novels" / out["slug"]).is_dir()
+
+
+def test_rename_only_title_same_slug(tmp_path):
+    proj, roots = make_project(tmp_path, ("alpha",))
+    write_index(proj, ("alpha",))
+    out = novels.rename_novel(proj, "alpha", "Alpha")  # slugify → "alpha" 不变
+    assert out["slug"] == "alpha"
+    assert (proj / "data" / "novels" / "alpha").is_dir()
+    assert novels.novel_meta(proj / "data" / "novels" / "alpha")["title"] == "Alpha"

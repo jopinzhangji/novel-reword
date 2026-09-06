@@ -245,13 +245,36 @@ async function loadSummary(){
           <span class="mut" style="font-size:12px;margin-left:8px">在控制台「开始作者在环」即发起设定讨论</span></div>
       </div>`
     : "";
-  el("summary").innerHTML = hint + `<div class="grid">
+  el("summary").innerHTML = hint + `
+    <div class="mini" style="margin-bottom:14px">
+      <h4>书名（在线编辑）</h4>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="titleInput" value="${esc(n.title)}" style="flex:1;min-width:200px">
+        <button onclick="renameCurrentNovel()">保存书名</button>
+      </div>
+      <div class="mut" style="margin-top:4px;font-size:12px">命名即更新 meta/索引/当前指针；若 slug 变化将重命名作品目录并刷新。</div>
+    </div>
+    <div class="grid">
     <div class="mini"><h4>位置</h4>${esc(p.chapter_title||"—")} · ${esc(p.beat_intent||"—")}<br>
       <span class="mut">回合 ${p.turns_in_beat ?? "—"} / 章 ${esc(p.chapter_id||"—")} 拍 ${esc(p.beat_id||"—")}</span></div>
     <div class="mini"><h4>成长</h4>有状态角色 ${n.growth && n.growth.characters_with_growth||0} · 迁移 ${n.growth && n.growth.transition_entries||0}</div>
     <div class="mini"><h4>关系</h4>${n.edge_count||0} 条边 · ${n.character_count||0} 角色</div>
     <div class="mini"><h4>事件</h4>${n.scope_event_count||0} 条 scope 事件</div>
   </div>`;
+}
+
+async function renameCurrentNovel(){
+  if (!currentSlug) return;
+  const t = (el("titleInput").value || "").trim();
+  if (!t){ alert("书名不能为空"); return; }
+  try {
+    const res = await j(`/api/novels/${currentSlug}/rename`,
+      { method:"PATCH", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ title: t }) });
+    currentSlug = res.slug;
+    await loadCards();              // 重建总览卡 + 小说下拉（新 slug 加入、旧 slug 移除）
+    el("novelSel").value = res.slug;
+    runDim("summary");              // 刷新进度页标题/摘要（同一维度）
+  } catch(e){ alert("命名失败：" + e.message); }
 }
 
 async function loadGraph(whole){
@@ -656,9 +679,15 @@ async function loadSystem(){
   el("systemBox").innerHTML = `<div class="grid">
     <div class="mini"><h4>当前小说</h4>
       ${cn ? `<b>${esc(cn.slug)}</b><div class="mut">${esc(cn.root)}</div>` : `<span class="noseq">未绑定（config/current_novel.yaml 缺失）</span>`}</div>
-    <div class="mini"><h4>LLM（v1 只读）</h4>
-      <code>${esc(fw.llm)}</code> · key=<code>${esc(fw.api_key_env || "—")}</code><br>
-      <div class="mut">${esc(JSON.stringify(fw.options || {}))} · ${esc(fw.note || "")}</div></div>
+    <div class="mini"><h4>LLM（v2 可写 · provider pinned <code>${esc(fw.llm)}</code>）</h4>
+      <div class="mut">白名单：${esc((fw.writable || []).join(" / "))} · ${esc(fw.note || "")}</div>
+      <label>模型 model<input id="llm_model" value="${esc((fw.options||{}).model||"")}" placeholder="deepseek-v5"></label>
+      <label>Base URL<input id="llm_base_url" value="${esc((fw.options||{}).base_url||"")}" placeholder="https://..."></label>
+      <label style="width:110px">超时(秒)<input type="number" id="llm_timeout" value="${(fw.options||{}).timeout==null?"":esc((fw.options||{}).timeout)}" min="1" max="300"></label>
+      <label style="width:110px">重试次数<input type="number" id="llm_max_retries" value="${(fw.options||{}).max_retries==null?"":esc((fw.options||{}).max_retries)}" min="0" max="10"></label>
+      <label>Key 环境变量<input id="llm_api_key_env" value="${esc(fw.api_key_env && fw.api_key_env!=="（未配置）" ? fw.api_key_env : "")}" placeholder="DASHSCOPE_API_KEY"></label>
+      <button onclick="patchSystemLLM()" style="margin-top:6px">保存 LLM</button>
+      <div class="mut" style="margin-top:4px">仅填需改字段；改后下一会话生效。</div></div>
     <div class="mini"><h4>作者在环互斥</h4>
       <span class="pill${wb.author_workbench_enabled ? " on" : ""}" style="cursor:pointer"
         onclick="patchSystem({'author_workbench_enabled':${wb.author_workbench_enabled ? "false" : "true"}})">
@@ -684,6 +713,16 @@ async function loadSystem(){
 async function patchSystem(payload){
   await j("/api/system", { method:"PATCH", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
   await loadSystem();
+}
+async function patchSystemLLM(){
+  const fw = {};
+  const m = (el("llm_model").value || "").trim(); if (m) fw.model = m;
+  const b = (el("llm_base_url").value || "").trim(); if (b) fw.base_url = b;
+  const t = el("llm_timeout").value; if (t !== "") fw.timeout = Number(t);
+  const r = el("llm_max_retries").value; if (r !== "") fw.max_retries = Number(r);
+  const k = (el("llm_api_key_env").value || "").trim(); if (k) fw.api_key_env = k;
+  if (!Object.keys(fw).length){ alert("请先填写要修改的 LLM 字段"); return; }
+  await patchSystem({ framework: fw });
 }
 loadCards();
 </script>

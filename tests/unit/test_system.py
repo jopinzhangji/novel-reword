@@ -42,7 +42,8 @@ def test_status_groups_llm_workbench_internet(project):
     st = system.system_status(project)
     assert st["framework"]["llm"] == "openai_compatible"
     assert st["framework"]["options"]["model"] == "deepseek-v4"
-    assert st["framework"]["readonly"] is True
+    assert st["framework"]["readonly"] is False  # v2 工作参数可写
+    assert st["framework"]["writable"] == ["model", "base_url", "timeout", "max_retries", "api_key_env"]
     assert st["workbench"]["author_workbench_enabled"] is False
     assert st["internet_search"]["enabled"] is False
     assert st["current_novel"]["slug"] == "alpha"
@@ -87,12 +88,44 @@ def test_internet_partial_patch_only_touches_known(project):
     assert st["internet_search"]["enabled"] is False  # 未写保持默认
 
 
-def test_framework_readonly_is_ignored(project):
-    # LLM 传写应被忽略（v1 只读），不落盘、不崩
+def test_framework_work_params_writable(project):
+    # LLM 工作参数（白名单）可写、落 per-novel top-level framework.llm_options、保既有 llm
+    root = project / "data" / "novels" / "alpha"
+    before = system.system_status(project)
+    st = system.patch_system(
+        project,
+        {"framework": {"model": "deepseek-v5", "base_url": "https://y", "timeout": 120, "max_retries": 3}},
+    )
+    assert st["framework"]["llm"] == "openai_compatible"  # provider 类型只读不破
+    assert st["framework"]["options"]["model"] == "deepseek-v5"
+    assert st["framework"]["options"]["base_url"] == "https://y"
+    assert st["framework"]["options"]["timeout"] == 120
+    assert st["framework"]["options"]["max_retries"] == 3
+    # 落盘：顶层 framework（非 runtime: 包装），且既有 config needed 不存在不干扰
+    import yaml
+
+    data = yaml.safe_load((root / "config" / "runtime.yaml").read_text(encoding="utf-8"))
+    assert "framework" in data
+    assert data["framework"]["llm_options"]["model"] == "deepseek-v5"
+    # 再读 effective 依然生效
+    assert system.system_status(project)["framework"]["options"]["model"] == "deepseek-v5"
+
+
+def test_framework_provider_type_still_readonly(project):
+    # 非白名单键（provider 类型）传入即忽略，不落盘、不崩
     before = system.system_status(project)
     st = system.patch_system(project, {"framework": {"llm": "tongyi"}})
     assert st["framework"]["llm"] == before["framework"]["llm"] == "openai_compatible"
-    assert st["framework"]["readonly"] is True
+
+
+def test_framework_api_key_env_writable(project):
+    root = project / "data" / "novels" / "alpha"
+    st = system.patch_system(project, {"framework": {"api_key_env": "MY_LLM_KEY"}})
+    assert st["framework"]["api_key_env"] == "MY_LLM_KEY"
+    import yaml
+
+    data = yaml.safe_load((root / "config" / "runtime.yaml").read_text(encoding="utf-8"))
+    assert data["framework"]["llm_options"]["api_key_env"] == "MY_LLM_KEY"
 
 
 def test_rejects_bad_values(project):
@@ -104,6 +137,14 @@ def test_rejects_bad_values(project):
         system.patch_system(project, {"internet_search": {"trust_level": "ultra"}})  # 非法枚举
     with pytest.raises(ValueError):
         system.patch_system(project, {"internet_search": "on"})  # 非 dict
+    with pytest.raises(ValueError):
+        system.patch_system(project, {"framework": {"model": ""}})  # 空串
+    with pytest.raises(ValueError):
+        system.patch_system(project, {"framework": {"timeout": 0}})  # 越界
+    with pytest.raises(ValueError):
+        system.patch_system(project, {"framework": {"max_retries": 11}})  # 越界
+    with pytest.raises(ValueError):
+        system.patch_system(project, {"framework": "openai"})  # 非 dict
 
 
 def test_no_current_novel_raises(tmp_path):

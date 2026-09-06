@@ -1,4 +1,4 @@
-"""GG5 /system Web 端点（FastAPI TestClient）：GET/PATCH round-trip + LLM 只读。
+"""GG5 /system Web 端点（FastAPI TestClient）：GET/PATCH round-trip + LLM v2 可写。
 
 无 fastapi 环境时整模块跳过（importorskip），核心 pytest 不受影响（船身不破）。
 """
@@ -23,7 +23,8 @@ def test_get_system(client):
     assert r.status_code == 200
     data = r.json()
     assert data["current_novel"]["slug"] == "alpha"
-    assert data["framework"]["readonly"] is True
+    assert data["framework"]["readonly"] is False  # v2 工作参数可写
+    assert data["framework"]["writable"]
     assert "internet_search" in data and "workbench" in data
 
 
@@ -35,8 +36,29 @@ def test_patch_workbench_via_http(client):
     assert client.get("/api/system").json()["workbench"]["author_workbench_enabled"] is True
 
 
+def test_patch_framework_via_http(client):
+    r = client.patch(
+        "/api/system",
+        json={"framework": {"model": "deepseek-v5", "base_url": "https://y", "timeout": 120}},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["framework"]["options"]["model"] == "deepseek-v5"
+    assert data["framework"]["options"]["base_url"] == "https://y"
+    assert data["framework"]["options"]["timeout"] == 120
+    # GET 反映 + provider 类型仍保留全局 openai_compatible
+    g = client.get("/api/system").json()
+    assert g["framework"]["llm"] == "openai_compatible"
+    assert g["framework"]["options"]["model"] == "deepseek-v5"
+
+
 def test_patch_internet_validation_400(client):
     r = client.patch("/api/system", json={"internet_search": {"max_chars": 50}})
+    assert r.status_code == 400
+
+
+def test_patch_framework_validation_400(client):
+    r = client.patch("/api/system", json={"framework": {"timeout": 0}})
     assert r.status_code == 400
 
 

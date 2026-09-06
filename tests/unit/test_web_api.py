@@ -110,3 +110,32 @@ def test_static_root_served(project):
     c = TestClient(project)
     r = c.get("/")
     assert r.status_code == 200 and "Novel-Data 工作台" in r.text
+
+def test_rename_via_http(project, client):
+    # 建 current_novel 指针指向 alpha，验证 rename 更新指针 + 落盘
+    import yaml
+    from pathlib import Path
+
+    # project.state.WORKBENCH_ROOT -> tmp_path（make_project 的项目根）
+    root = project.state.WORKBENCH_ROOT
+    from tests.unit.workbench_support import write_yaml
+
+    write_yaml(
+        Path(root) / "config" / "current_novel.yaml",
+        {"slug": "alpha", "title": "旧名", "root": str(Path(root) / "data" / "novels" / "alpha")},
+    )
+    r = client.patch("/api/novels/alpha/rename", json={"title": "夜行灵官"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["slug"] == "夜行灵官" and data["title"] == "夜行灵官"
+    # 指数刷新：旧 slug alpha 移除、新 slug 追加到末端（beta 保留）
+    got = [i["slug"] for i in client.get("/api/novels").json()]
+    assert "alpha" not in got and "夜行灵官" in got and "beta" in got
+    assert got == ["beta", "夜行灵官"]  # 旧行移除、新行追加到末端
+    cur = yaml.safe_load((Path(root) / "config" / "current_novel.yaml").read_text(encoding="utf-8"))
+    assert cur["slug"] == "夜行灵官" and cur["provisional"] is False
+
+
+def test_rename_empty_via_http_400(project, client):
+    r = client.patch("/api/novels/alpha/rename", json={"title": "  "})
+    assert r.status_code == 400

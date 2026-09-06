@@ -1,23 +1,50 @@
 """G4 作品索引 / 进度总览（SDD D13 §4 多小说进度卡片）。
 
-全部只读、确定性：委托 outline_store / relationship_graph / character_growth，
+只读、确定性：委托 outline_store / relationship_graph / character_growth，
 对 data/novels/<slug>/ 逐书聚合「章节/节拍/回合 + 成长爆发 + 关系边数 + 最近回合」。
+在线书名编辑（D13 §6.8，确定性写口）：rename_novel 改 meta/index/current_novel，
+slug 变化时目录重命名——只动身份元数据、不碰 book/ 与 config/*.yaml 写作产物。
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
+from src.author_loop.novel_identity import slugify_title
 from src.workbench.common import (
     characters_config,
     characters_roster,
     novel_meta,
     novel_roots,
+    novels_dir,
     scope_event_dirs,
 )
 from src.runtime.character_growth import load_growth_state
 from src.runtime.file_sync import load_scope_events_from_disk
 from src.runtime.outline_store import load_outline_snapshot, resolve_current_beat
 from src.runtime.relationship_graph import load_graph, relationship_graph_yaml_path
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _read_yaml(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _write_yaml(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
 
 
 def _growth_totals(novel_root: Path) -> dict:
@@ -120,3 +147,91 @@ def story_events(novel_root: Path, scope_id: str = "main", limit: int = 20) -> d
         "events": rows[:limit],
         "outline_pointer": _outline_pointer(novel_root),
     }
+
+
+def _resolved_root(project_root: Path, slug: str) -> Path:
+    """slug → data/novels/<slug>/；找不到抛 ValueError（不沿 index 顺序，避免歧义）。"""
+    root = novels_dir(project_root) / slug
+    if not root.is_dir():
+        raise ValueError(f"未找到小说 slug={slug}")
+    return root
+
+
+def rename_novel(project_root: Path, slug: str, title: str) -> dict:
+    """在线书名编辑（D13 §6.8，确定性写口）。
+
+    仅改身份元数据：meta.yaml（title+slug，status 不变）+ data/novels/index.yaml
+    （按旧 slug 移除旧行、按新 slug 追加）+ config/current_novel.yaml（指针指向本
+    小说时更新 slug/title/root，provisional=False）。slug 变化时对目录 rename
+    （`slugify_title` 冲突递增后缀）。不触碰 book/ 与 config/world|characters|outline
+    等写作产物。返回新 `{slug, title, root}`。
+    """
+    project_root = Path(project_root)
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("书名不能为空")
+    old_root = _resolved_root(project_root, slug)
+
+    meta = _read_yaml(old_root / "meta.yaml")
+    old_slug = str(meta.get("slug") or old_root.name)
+    old_status = str(meta.get("status") or "unknown")
+
+    new_slug = slugify_title(title)
+    if not new_slug:
+        new_slug = old_slug
+    target = novels_dir(project_root) / new_slug
+    if target.resolve() != old_root.resolve():
+        if target.exists():
+            i = 2
+            base = new_slug
+            while (novels_dir(project_root) / f"{base}-{i}").exists():
+                i += 1
+            new_slug = f"{base}-{i}"
+            target = novels_dir(project_root) / new_slug
+        old_root.rename(target)
+        novel_root = target
+    else:
+        novel_root = old_root
+
+    # meta.yaml：title + slug（status 不变：draft 仍是 draft）
+    _write_yaml(
+        novel_root / "meta.yaml",
+        {
+            **meta,
+            "title": title,
+            "slug": new_slug,
+        },
+    )
+
+    # index.yaml：按旧 slug 移除旧行、按新 slug 追加
+    idx_path = novels_dir(project_root) / "index.yaml"
+    idx = _read_yaml(idx_path)
+    novels = [n for n in idx.get("novels") or [] if not (isinstance(n, dict) and n.get("slug") == old_slug)]
+    novels.append(
+        {
+            "slug": new_slug,
+            "title": title,
+            "status": old_status,
+            "updated_at": _now_iso(),
+        }
+    )
+    _write_yaml(idx_path, {"novels": novels})
+
+    # config/current_novel.yaml：指针指向本小说时更新
+    cur_path = project_root / "config" / "current_novel.yaml"
+    cur = _read_yaml(cur_path)
+    cur_slug = str(cur.get("slug") or "")
+    cur_root = str(cur.get("root") or "")
+    if cur_slug == old_slug or cur_root == str(old_root):
+        _write_yaml(
+            cur_path,
+            {
+                **cur,
+                "slug": new_slug,
+                "title": title,
+                "root": str(novel_root),
+                "provisional": False,
+            },
+        )
+
+    return {"slug": new_slug, "title": title, "root": str(novel_root)}
