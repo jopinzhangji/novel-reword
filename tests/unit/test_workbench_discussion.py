@@ -55,6 +55,28 @@ def test_discussion_snapshot_full(tmp_path):
     assert snap["discussion_summary"]["session_file"] == "s1.jsonl"
 
 
+def test_discussion_snapshot_status_and_suggestion(tmp_path):
+    _proj, roots = make_project(tmp_path, ("alpha",))
+    root = roots["alpha"]
+    _build(root)
+    snap = discussion_snapshot(root)
+    st = snap["status"]
+    assert st["has_synopsis"] is True
+    assert st["world_filled"] is True
+    assert st["direction_count"] == 2
+    assert st["directions_with_detail"] == 2  # 技术阶段(l1)有 level、职级有 chapters
+    assert st["design_session_present"] is True
+    assert snap["suggestion"]  # 非空建议存在
+
+
+def test_discussion_snapshot_suggestion_guides_empty(tmp_path):
+    _proj, roots = make_project(tmp_path, ("alpha",))
+    snap = discussion_snapshot(roots["alpha"])  # 全空 → 建议引导填简介/世界/设定方向
+    assert "简介" in snap["suggestion"] or "设定方向" in snap["suggestion"]
+    assert snap["status"]["has_synopsis"] is False
+    assert snap["status"]["world_filled"] is False
+
+
 def test_discussion_snapshot_missing_files_safe(tmp_path):
     _proj, roots = make_project(tmp_path, ("alpha",))
     snap = discussion_snapshot(roots["alpha"])  # 无 world/setting/design/state 文件
@@ -65,3 +87,4 @@ def test_discussion_snapshot_missing_files_safe(tmp_path):
     assert snap["world"]["scopes"] == []
     assert snap["settings"] == []
     assert snap["discussion_summary"]["summary"] == ""
+    assert "suggestion" in snap and "status" in snap

@@ -15,6 +15,18 @@
 
 ## 2026-09-06
 
+### 设定讨论面板增强：当前建议 + 当前设定情况概述（D13 §6.9，后端 + 前端）
+
+- **需求**：用户反馈「设定讨论的内容还是没有展示出来」，建议在设定讨论下加「设定当前的建议」与「当前设定的情况」，可下转查看详细情况。
+- **后端（`src/workbench/discussion.py`）**：`discussion_snapshot` 增两个确定性字段——**`suggestion`**（当前建议：据 阶段/简介/世界/设定方向 推导下一步动作，如「未填简介先补种子」「世界名/时代未填建议进入设定讨论」等，无 LLM）+ **`status`**（紧凑情况摘要：`has_synopsis`/`world_filled`/`direction_count`/`directions_with_detail`/`design_session_present`）。既有字段保持不变。
+- **前端（`web/static/index.html`）**：`#discussionBox` 改为**顶部「阶段 + 当前设定情况（status 摘要行）+ 当前建议（suggestion 标签）」**，下方 `<details open>`「查看详细情况（下转）」内含简介(可编辑保存) + 世界 + 设定方向卡 + 最近归档讨论摘要。
+- **诚实标注**：`suggestion`/`status` 均为确定性读口推导，非 LLM「自动化建议」；进行中的单轮仍走引擎线内存，仅在保存/归档后进入 `discussion_summary`。
+- **测试**：`test_workbench_discussion.py` 增 `status`/`suggestion` 断言（全空时建议含「简介/设定方向」引导词；`_build` 场景 directions_with_detail=2）；全量回归 **489 通过 + 1 跳过**；`node --check` 抽 JS 通过；D13 §6.9 + 修订记录同步。
+
+---
+
+## 2026-09-06
+
 ### 作者在环 replyInput「输入后无法显示」修复（§6.3 会话 DOM 重绘签名，前端）
 
 - **症状**：控制台作者在环 replyInput 中输入文字（尤其中文 IME）时，轮询每 900ms 无条件重建 `sessionBox` → recreate `replyInput`，反复打断 IME 合成与光标，表现「输入后无法显示」。

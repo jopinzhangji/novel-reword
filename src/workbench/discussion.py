@@ -88,16 +88,62 @@ def _discussion_summary(novel_root: Path) -> dict:
     }
 
 
+def _suggestion(phase: dict, synopsis: str, world: dict, settings: list, design_present: bool) -> str:
+    """确定性「当前建议」：据阶段/简介/世界/设定方向推导下一步动作，无 LLM。"""
+    ph = (phase or {}).get("phase")
+    parts: list[str] = []
+    if ph == "DESIGN_MAIN" and (phase or {}).get("subphase") == "setting_intent_bootstrap":
+        parts.append("处于设定初始引导：建议先填一句话简介作种子，再说明作品类型/世界核心。")
+    elif ph == "DESIGN_DISCUSSION":
+        parts.append("正在设定讨论中——单轮原文在引擎线内存，保存/归档后会落到下方「最近归档讨论」。")
+    if not synopsis:
+        parts.append("尚未填写简介：先补一句话设定，作为设定讨论的初始种子。")
+    if not (world.get("name") or "").strip() or not (world.get("era") or "").strip():
+        parts.append("世界名称/时代 未填：建议进入设定讨论补齐基础世界观。")
+    real = [s for s in settings if (s.get("levels_count") or 0) > 0 or (s.get("chapters_count") or 0) > 0]
+    every_real = [s for s in settings if s.get("name") not in ("待定",)]
+    if settings and design_present:
+        parts.append(f"已生成 {len(settings)} 个设定方向（{len(real)} 个含实质内容），最近归档摘要见下方。")
+    elif settings:
+        parts.append(f"已生成 {len(settings)} 个方向（{len(real)} 个含实质内容）；继续讨论可深化，完成保存/归档后回到此处可查看摘要。")
+    elif not design_present:
+        parts.append("尚未生成设定方向：填简介后进入设定讨论即可生成。")
+    if not design_present and every_real and not real:
+        parts.append("方向多为占位（待定）：作者暂未说明剧情走向，建议先说明故事核心再继续。")
+    return "；".join(parts) or "暂无特别建议。"
+
+
 def discussion_snapshot(novel_root) -> dict:
-    """返回当前小说的设定讨论/设定情况快照（确定性、无 LLM、全缺安全）。"""
+    """返回当前小说的设定讨论/设定情况快照（确定性、无 LLM、全缺安全）。
+
+    新增 `suggestion`（当前建议）与 `status`（紧凑情况摘要）供控制台面板顶部呈现；
+    world/settings 保留详细 data 供「下转看详细情况」。
+    """
     from src.workbench.common import novel_meta
 
     novel_root = Path(novel_root)
     meta = novel_meta(novel_root)
+    phase = _phase_from_state(novel_root)
+    synopsis = safe_str(meta.get("synopsis"))
+    world = _world_from_file(novel_root)
+    settings = _settings_from_file(novel_root)
+    summary = _discussion_summary(novel_root)
+    design_present = bool(summary.get("summary"))
+    status = {
+        "has_synopsis": bool(synopsis),
+        "world_filled": bool((world.get("name") or "").strip() or (world.get("era") or "").strip()),
+        "direction_count": len(settings),
+        "directions_with_detail": sum(
+            (s.get("levels_count") or 0) > 0 or (s.get("chapters_count") or 0) > 0 for s in settings
+        ),
+        "design_session_present": design_present,
+    }
     return {
-        "phase": _phase_from_state(novel_root),
-        "synopsis": safe_str(meta.get("synopsis")),
-        "world": _world_from_file(novel_root),
-        "settings": _settings_from_file(novel_root),
-        "discussion_summary": _discussion_summary(novel_root),
+        "phase": phase,
+        "synopsis": synopsis,
+        "suggestion": _suggestion(phase, synopsis, world, settings, design_present),
+        "status": status,
+        "world": world,
+        "settings": settings,
+        "discussion_summary": summary,
     }

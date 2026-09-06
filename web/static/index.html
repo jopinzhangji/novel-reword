@@ -667,20 +667,31 @@ async function loadDiscussion(){
   const badge = `<span class="badge">${esc(String(phLabel))}</span>` +
     (ph.subphase ? `<span class="badge">${esc(String(ph.subphase))}</span>` : "");
 
-  // 简介（可编辑 + 保存，作设定讨论种子）
+  // —— 顶部：阶段 + 当前建议 + 当前设定情况（紧凑摘要）——
+  const st = d.status || {};
+  const statusHtml = `<div class="row"><span>阶段</span><span>${badge}</span></div>
+    <div class="row"><span>简介</span><span>${st.has_synopsis ? "已填" : "<b style='color:var(--warn)'>未填</b>"}</span></div>
+    <div class="row"><span>世界</span><span>${st.world_filled ? "已填基础（名/时代）" : "<b style='color:var(--warn)'>未填</b>"}</span></div>
+    <div class="row"><span>设定方向</span><span>${st.direction_count || 0} 个（${st.directions_with_detail || 0} 有实质内容）</span></div>
+    <div class="row"><span>归档讨论</span><span>${st.design_session_present ? "已有归档摘要" : "尚无"}</span></div>`;
+
+  const sugg = d.suggestion || "";
+  const suggHtml = sugg
+    ? `<div style="margin-top:6px" class="mut"><span class="tag">当前建议</span> ${esc(sugg)}</div>`
+    : "";
+
+  // —— 下方：详细情况（world / 设定方向 / 归档讨论；可下转查看）——
   const syn = d.synopsis || "";
   const synEdit = syn
     ? `<div class="row"><span>简介</span><span>${esc(syn)}</span> · <button onclick="editSynopsisInline()">编辑</button></div>`
     : `<div class="mut">尚未填写简介——新小说进作者在环时会引导填写，作为设定讨论的初始种子。</div>`;
 
-  // world
   const w = d.world || {};
   const scopes = (w.scopes||[]).map(s => `<span class="tag" title="${esc(s.description)}">${esc(s.name||s.id)}</span>`).join(" ");
   const worldHtml = `<div class="row"><span>世界</span><span>${esc(w.name||"—")}${w.era?(" · "+esc(w.era)):""}</span></div>` +
     (w.rules ? `<div class="mut" style="font-size:12px">${esc(w.rules)}</div>` : "") +
     (scopes ? `<div style="margin-top:4px">${scopes}</div>` : "");
 
-  // 设定方向
   const settings = (d.settings||[]).map(s => `
     <div class="card small">
       <b>${esc(s.name)}</b>
@@ -691,19 +702,29 @@ async function loadDiscussion(){
     ? `<div class="grid">${settings}</div>`
     : `<div class="mut">尚未生成设定方向（设定讨论会在填简介后产出）。</div>`;
 
-  // 最近归档讨论
   const ds = d.discussion_summary || {};
   const discHtml = ds.summary
-    ? `<div class="mut" style="font-size:12px">${esc(ds.summary)}</div>` +
+    ? `<div class="mut" style="font-size:12px;white-space:pre-wrap">${esc(ds.summary)}</div>` +
       (ds.last_updated ? `<div class="mut" style="font-size:11px">更新于 ${esc(ds.last_updated)}</div>` : "")
     : `<div class="mut">尚无归档讨论摘要。</div>`;
 
+  const detailId = "discDetail";
+  const details = `<div id="${detailId}" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">
+      ${synEdit}
+      <h4 class="secsub" style="font-size:12px;margin-top:8px">世界</h4>${worldHtml}
+      <h4 class="secsub" style="font-size:12px;margin-top:8px">设定方向</h4>${setHtml}
+      <h4 class="secsub" style="font-size:12px;margin-top:8px">最近归档讨论</h4>${discHtml}
+    </div>`;
+
   el("discussionBox").innerHTML = `
-    <div class="row"><span>阶段</span><span>${badge}</span></div>
-    ${synEdit}
-    ${worldHtml}
-    <h4 class="secsub" style="font-size:12px;margin-top:8px">设定方向</h4>${setHtml}
-    <h4 class="secsub" style="font-size:12px;margin-top:8px">最近归档讨论</h4>${discHtml}`;
+    <div>
+      <div class="mut" style="font-size:11px">阶段</div>${statusHtml}
+      ${suggHtml}
+    </div>
+    <details open>
+      <summary style="cursor:pointer;margin-top:8px" ondblclick="event.preventDefault()">查看详细情况（下转）</summary>
+      ${details}
+    </details>`;
 }
 
 // 终端输出可圈选/复制：用户在 termBox 内 mousedown 到 mouseup/复制 期间挂起轮询全量替换，
