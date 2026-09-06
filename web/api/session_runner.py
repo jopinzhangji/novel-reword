@@ -52,6 +52,42 @@ def _default_run_fn() -> RunFn:
     return main
 
 
+def pin_current_novel(project_root: Path | None, slug: str) -> Path | None:
+    """把引擎的全局 `current_novel.yaml` 指到本会话的小说根，实现工作台按小说隔离。
+
+    `run_novel_with_author.main` 没有"目标小说"参数——它经 `current_novel_root()`
+    读**仓库级** `config/current_novel.yaml` 决定操作哪本小说。若会话为 A 建而全局
+    指针仍指向 B，则引擎（含 `special_settings_config_dir` 等）会把设定/世界写到 B，
+    造成「终端显示参考简介重生成的内容、面板却显示旧设定」的分叉。故启动线程前把
+    指针钉到本小说根。返回被指向的 novel root；无该目录（不存在的 slug）则 None。
+    """
+    if not project_root:
+        return None
+    novel_root = Path(project_root) / "data" / "novels" / slug
+    if not novel_root.is_dir():
+        return None
+    import yaml
+
+    cfg_dir = Path(project_root) / "config"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    p = cfg_dir / "current_novel.yaml"
+    cur = {}
+    try:
+        cur = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001 — 读取失败视为空，重写
+        cur = {}
+    if (cur.get("root") or "") == str(novel_root):
+        return novel_root  # 已指向本小说
+    p.write_text(
+        yaml.safe_dump({"slug": slug, "root": str(novel_root)}, allow_unicode=True),
+        encoding="utf-8",
+    )
+    logging.getLogger("web.api.session_runner").info(
+        "会话绑定小说：current_novel → %s (%s)", slug, novel_root
+    )
+    return novel_root
+
+
 class WorkbenchSession:
     """一本 data_root 上的一个作者在环会话。"""
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from web.api.session_runner import SessionRegistry
+from web.api.session_runner import SessionRegistry, pin_current_novel
 
 router = APIRouter(tags=["session"])
 
@@ -43,6 +43,8 @@ def _run_fn(request: Request):
 def create_session(request: Request, body: SessionCreateBody) -> dict:
     reg = _registry(request)
     key = body.data_root or body.slug
+    # 启动引擎线程前，把全局 current_novel 钉到本会话小说根（引擎按它决定操作哪本小说）。
+    pin_current_novel(getattr(request.app.state, "WORKBENCH_ROOT", None), key)
     session, fresh = reg.create(key, data_root=key, run_fn=_run_fn(request))
     if not fresh:
         raise HTTPException(status_code=409, detail=f"data_root 已有活跃作者在环会话（{key}）")

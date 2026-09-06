@@ -15,6 +15,20 @@
 
 ## 2026-09-06
 
+### 会话引擎选错小说根因：工作台会话未把 current_novel 钉到本会话小说（D13 §6.3 / §6.7，Web 后端）
+
+- **需求（用户反馈）**：选择 轮回路 会话、覆盖设定并输入简介后，返回的设定与简介不符；且「终端输出设定阶段打印」与「前端设定情况」完全不符。
+- **根因（重大）**：`run_novel_with_author.main` **没有"目标小说"参数**——它经 `current_novel_root()` 读**仓库级** `config/current_novel.yaml`（当时指向 `e2e-llm-test`）决定操作哪本小说。工作台 `create_session` 用的 `data_root`（轮回路）只当 key/label，**从未传给引擎**。于是：
+  - 引擎（`special_settings_config_dir` 等）把依简介重生成的世界/设定写到 **e2e-llm-test/config/**（时间戳 09-06T13:35），明明正确参考了简介（战力「源忆负载」、境界「死后文明序列」、世界「赤壤纪元」）；
+  - 前端 `discussion_snapshot(轮回路)` 读 **轮回路/config/** → 仍是旧占位（敕印权力结构）。→ 终端与面板分叉的直接原因。
+- **修法（`web/api/routers/session.py` + `web/api/session_runner.py`）**：`create_session` 在启动引擎线程前调用新 `pin_current_novel(request.app.state.WORKBENCH_ROOT, key)`——把仓库级 `config/current_novel.yaml` 写成 `{slug, root: <root>/data/novels/<slug>}`（该小说目录存在才写；已指向则不动；best-effort）。使引擎从启动起就操作正确小说。
+- **局限（诚实标注）**：按仓库级单指针模型，同一时刻仅建议运行一个作者会话；并发多小说会话会因指针被后建会话改写而互相干扰（现实单用户一次一本，可接受）。
+- **测试**：`test_web_session.py` 增 2 条——建会话钉到本小说根；无小说目录不误改指针。全量回归 **493 通过 + 1 跳过**。
+
+---
+
+## 2026-09-06
+
 ### 设定讨论面板未呈现「以上世界模型与设定」具体内容 + 无补充简介入口（D13 §6.9，后端 + 前端）
 
 - **需求（用户反馈）**：作者在环显示「请审阅以上世界模型与设定…」审阅屏，但「设定讨论/设定情况」面板顶部只显示计数与建议文案，**不显示该具体内容**（敕印等级阶梯、世界 brief 等），且 synopsis 为空时**没有「补充简介」入口**（旧 `synEdit` 仅在 synopsis 非空时渲染「编辑」钮，空时仅一行死文案）。

@@ -88,6 +88,46 @@ def test_session_reply_round_trip(client):
     assert s["pending_prompt"] is None
 
 
+def test_create_session_pins_current_novel_to_novel_root(app, client, tmp_path):
+    """建会话时把全局 current_novel.yaml 钉到本会话小说根，避免引擎写到别的小说（轮回路分叉根因）。"""
+    import yaml
+
+    novel_root = tmp_path / "data" / "novels" / "tonga"
+    novel_root.mkdir(parents=True, exist_ok=True)
+    (novel_root / "meta.yaml").write_text(
+        yaml.safe_dump({"slug": "tonga", "title": "通卡"}, allow_unicode=True), encoding="utf-8"
+    )
+    # 预置一个"旧的"全局指针指向别的小说，模拟遗留状态
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    (cfg_dir / "current_novel.yaml").write_text(
+        yaml.safe_dump({"slug": "other", "root": str(tmp_path / "data" / "novels" / "other")}, allow_unicode=True),
+        encoding="utf-8",
+    )
+    assert app.state.WORKBENCH_ROOT == tmp_path
+
+    r = client.post("/api/session", json={"slug": "tonga", "data_root": "tonga"})
+    assert r.status_code == 200
+    after = yaml.safe_load((cfg_dir / "current_novel.yaml").read_text(encoding="utf-8"))
+    assert after["slug"] == "tonga"
+    assert after["root"] == str(novel_root)
+
+
+def test_create_session_no_novel_dir_does_not_pin(app, client, tmp_path):
+    """slug 无对应小说目录时不写 current_novel（best-effort，不误改全局指针）。"""
+    import yaml
+
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    (cfg_dir / "current_novel.yaml").write_text(
+        yaml.safe_dump({"slug": "ghost", "root": "/some/ghost"}, allow_unicode=True), encoding="utf-8"
+    )
+    r = client.post("/api/session", json={"slug": "ghost", "data_root": "ghost"})
+    assert r.status_code == 200
+    after = yaml.safe_load((cfg_dir / "current_novel.yaml").read_text(encoding="utf-8"))
+    assert after["slug"] == "ghost"  # 无目录 → 不覆盖原指针
+
+
 def test_mutual_exclusion_409_on_active_data_root(client):
     # 建立首个会话（阻塞在 Q1，保持 running）
     r1 = client.post("/api/session", json={"slug": "one", "data_root": "one"})
