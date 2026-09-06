@@ -235,7 +235,17 @@ async function loadNovel(){
 async function loadSummary(){
   const n = await j(`/api/novels/${currentSlug}/summary`);
   const p = n.outline_pointer || {};
-  el("summary").innerHTML = `<div class="grid">
+  // 未开始判定：尚无任何大纲节拍、且无 scope 事件 → 世界/设定尚未建立，先走设定讨论阶段
+  const notStarted = !p.had_any_beat && !(n.scope_event_count > 0);
+  const hint = notStarted
+    ? `<div class="mini" style="border-left:4px solid var(--acc);margin-bottom:14px">
+        <h4>尚未开始 · 需进入设定讨论阶段</h4>
+        <div class="mut">该小说还没有大纲节拍，世界 / 设定尚未建立。请先在<b>设定讨论阶段</b>完善世界观与设定，确认后才会进入正篇回合。</div>
+        <div style="margin-top:10px"><button onclick="showDim('console')">前往控制台 · 设定讨论</button>
+          <span class="mut" style="font-size:12px;margin-left:8px">在控制台「开始作者在环」即发起设定讨论</span></div>
+      </div>`
+    : "";
+  el("summary").innerHTML = hint + `<div class="grid">
     <div class="mini"><h4>位置</h4>${esc(p.chapter_title||"—")} · ${esc(p.beat_intent||"—")}<br>
       <span class="mut">回合 ${p.turns_in_beat ?? "—"} / 章 ${esc(p.chapter_id||"—")} 拍 ${esc(p.beat_id||"—")}</span></div>
     <div class="mini"><h4>成长</h4>有状态角色 ${n.growth && n.growth.characters_with_growth||0} · 迁移 ${n.growth && n.growth.transition_entries||0}</div>
