@@ -15,6 +15,17 @@
 
 ## 2026-09-06
 
+### 作者在环 replyInput「输入后无法显示」修复（§6.3 会话 DOM 重绘签名，前端）
+
+- **症状**：控制台作者在环 replyInput 中输入文字（尤其中文 IME）时，轮询每 900ms 无条件重建 `sessionBox` → recreate `replyInput`，反复打断 IME 合成与光标，表现「输入后无法显示」。
+- **根因**：旧 `kept`（值/选区还原）只补 value+cursor，无法保留被销毁 textarea 的 IME 合成会话。
+- **修法（`web/static/index.html`）**：`renderSession` 只在本会话**逻辑状态变化**（`status`/`pending_prompt`/`data_root`/`error` 组成签名）时才重建 `sessionBox`；待答期间 `pending_prompt` 不变 → 不重建，replyInput 原样保留，IME/光标不被打断。`kept` 值/选区还原保留兜底。终端 `termBox` 流更新、`startSessionPoll()`、§6.9 设定快照轻刷不受签名影响（固定在重建块外执行）。会话 `none`/清理时 `_sessionDomSig=null` 复位，下次开始能重新渲染。另修正 §6.9 轻刷状态门：后端真实 status 是 `running|created`（此前误写 `active|pending` 恒不触发）。
+- **验收**：`node --check` 抽 JS 通过；全量回归 **487 通过 + 1 跳过**。
+
+---
+
+## 2026-09-06
+
 ### 在线书名编辑 + LLM 工作参数可写（总览/进度重命名 + /system v2）
 
 - **需求**：用户要求「（初稿）待命名」的小说可**在工作台在线命名**；并让「对应的系统配置」可改——即 `/system` 的 **LLM 工作参数**（`framework.llm_options` 的 `model`/`base_url`/`timeout`/`max_retries`，另含作者早前提及的「Key」→ `api_key_env` 环境变量名）。范围经确认：LLM 相关可写（白名单），provider 类型本身与密钥值仍只读；书名在线编辑入口放**总览/进度页**。

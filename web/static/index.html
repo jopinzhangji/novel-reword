@@ -172,6 +172,7 @@
 "use strict";
 let currentSlug = null;
 let focusChar = "";   // 面板 #5 跨卡联动：当前聚焦角色 id（空=全部）
+let _sessionDomSig = null;  // §6.3 作者在环：会话 DOM 重绘签名（无变化不重建，保 IME/光标）
 
 async function j(path, opts) {
   const r = await fetch(path, opts);
@@ -553,43 +554,49 @@ function renderSession(s){
   const bar = el("sessionBox");
   if (!s || s.status === "none"){
     stopSessionPoll();
+    _sessionDomSig = null;   // 会话结束/清理后复位签名，下次开始重新渲染
     bar.innerHTML = `<div class="mini"><h4>作者在环（互斥）</h4><div>
       <button onclick="startSession()">开始作者在环</button>
       </div><div class="mut" style="margin-top:6px">author_workbench.enabled=true 时终端不读 stdin，作者交互只在前端（G3 / 大纲推进 / 回合审阅 prompt 全走这里）。</div></div>`;
     return;
   }
   const st = s.status;
-  // 轮询每 900ms 重绘 sessionBox 会重建 replyInput：先在重建前把已输入的值与光标保住，
-  // 重建后还原，避免用户正在输入时字被打掉（D13 §6.3 作者在环收敛）。
-  const prevIn = bar.querySelector("#replyInput");
-  const kept = prevIn
-    ? { v: prevIn.value, s: prevIn.selectionStart, e: prevIn.selectionEnd,
-        f: document.activeElement === prevIn }
-    : null;
-  let body;
-  if (st === "running"){
-    body = s.pending_prompt
-      ? `<div><b>待作者答复</b></div>
-         <div class="mut" style="margin:4px 0;white-space:pre-wrap">${esc(s.pending_prompt)}</div>
-         <textarea id="replyInput" rows="2" style="width:100%"></textarea>
-         <button onclick="replySession()">提交回复</button>`
-      : `<span class="mut">…引擎处理中（非待答）…</span>`;
-  } else if (st === "done"){ body = `<span class="mut">已完成本会话。</span>`; }
-  else if (st === "failed"){ body = `<span class="noseq">失败：${esc(s.error || "?")}</span>`; }
-  else { body = `<span class="mut">已中止（被阻塞的输入已解除，不挂死）。</span>`; }
-  bar.innerHTML = `<div class="mini"><h4>作者在环会话 <span class="tag">${esc(st)}</span>
-      <span class="slug" style="font-size:11px">data_root: ${esc(s.data_root || "")}</span></h4>
-    ${body}
-    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-      ${st === "running" ? `<button onclick="abortSession()">中止</button>` : ""}
-      <button onclick="endSession()">结束并清理</button>
-    </div></div>`;
-  // 重绘后还原用户输入（若新内容仍有 replyInput）
-  const ri = bar.querySelector("#replyInput");
-  if (ri && kept){
-    ri.value = kept.v;
-    try { ri.selectionStart = kept.s; ri.selectionEnd = kept.e; } catch(_){}
-    if (kept.f && document.activeElement !== ri){ ri.focus(); }
+  // 轮询每 900ms 触发一次。仅当会话「逻辑状态」变化（status/待答 prompt/错误/data_root）才重建
+  // sessionBox——否则无条件重建会 recreate replyInput，打断作者正在输入时的 IME 合成与光标，
+  // 表现为「输入后无法显示」（D13 §6.3 作者在环收敛；配合 kept 值/选区还原兜底）。
+  const sig = JSON.stringify([st, s.data_root, s.pending_prompt || "", s.error || ""]);
+  if (sig !== _sessionDomSig){
+    _sessionDomSig = sig;
+    const prevIn = bar.querySelector("#replyInput");
+    const kept = prevIn
+      ? { v: prevIn.value, s: prevIn.selectionStart, e: prevIn.selectionEnd,
+          f: document.activeElement === prevIn }
+      : null;
+    let body;
+    if (st === "running"){
+      body = s.pending_prompt
+        ? `<div><b>待作者答复</b></div>
+           <div class="mut" style="margin:4px 0;white-space:pre-wrap">${esc(s.pending_prompt)}</div>
+           <textarea id="replyInput" rows="2" style="width:100%"></textarea>
+           <button onclick="replySession()">提交回复</button>`
+        : `<span class="mut">…引擎处理中（非待答）…</span>`;
+    } else if (st === "done"){ body = `<span class="mut">已完成本会话。</span>`; }
+    else if (st === "failed"){ body = `<span class="noseq">失败：${esc(s.error || "?")}</span>`; }
+    else { body = `<span class="mut">已中止（被阻塞的输入已解除，不挂死）。</span>`; }
+    bar.innerHTML = `<div class="mini"><h4>作者在环会话 <span class="tag">${esc(st)}</span>
+        <span class="slug" style="font-size:11px">data_root: ${esc(s.data_root || "")}</span></h4>
+      ${body}
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        ${st === "running" ? `<button onclick="abortSession()">中止</button>` : ""}
+        <button onclick="endSession()">结束并清理</button>
+      </div></div>`;
+    // 重绘后还原用户输入（若新内容仍有 replyInput）
+    const ri = bar.querySelector("#replyInput");
+    if (ri && kept){
+      ri.value = kept.v;
+      try { ri.selectionStart = kept.s; ri.selectionEnd = kept.e; } catch(_){}
+      if (kept.f && document.activeElement !== ri){ ri.focus(); }
+    }
   }
   // GG-W #6：终端输出（会话期日志尾部）随轮询刷新
   const stream = s.stream && Array.isArray(s.stream) ? s.stream : [];
@@ -608,8 +615,8 @@ function renderSession(s){
     }
   }
   startSessionPoll();
-  // §6.9：设定讨论进行中时，随轮询轻刷设定快照（确定性读口，best-effort）
-  if (currentSlug && s && (s.status === "active" || s.status === "pending")){
+  // §6.9：会话活跃（engine 处理或待答）时随轮询轻刷设定快照（确定性读口，best-effort）
+  if (currentSlug && s && (s.status === "running" || s.status === "created")){
     loadDiscussion().catch(()=>{});
   }
 }
