@@ -68,6 +68,7 @@ def novel_meta(novel_root: Path) -> dict[str, object]:
         "status": safe_str(meta.get("status")) or "unknown",
         "created_at": safe_str(meta.get("created_at")),
         "world_name": safe_str(meta.get("world_name")),
+        "synopsis": safe_str(meta.get("synopsis")),
     }
 
 

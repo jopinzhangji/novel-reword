@@ -30,7 +30,11 @@ from src.author_loop.novel_bootstrap import (
     interactive_resolve_novel_for_design_phase,
     prepare_new_novel_if_needed,
 )
-from src.author_loop.novel_identity import confirm_title_and_persist
+from src.author_loop.novel_identity import (
+    confirm_title_and_persist,
+    read_synopsis,
+    write_synopsis,
+)
 from src.author_loop.design_phase import run_supplement_setting_during_turn
 from src.author_loop.turn_planning import (
     generate_turn_plan_for_turn,
@@ -153,6 +157,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
     setting_research = inner_runtime.get("setting_research") or {}
     log.debug("[启动] setting_research enabled=%s, trigger=%s", setting_research.get("enabled"), setting_research.get("trigger"))
     author_session: AuthorSession | None = None
+    synopsis_asked = False
     if setting_research.get("enabled") and setting_research.get("trigger") == "design_only":
         log.debug("[启动] 进入设定阶段 run_design_phase")
         novel_root_before = current_novel_root(config_dir)
@@ -189,6 +194,26 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             scope_id = scene["scope_id"]
             time_str = scene["time"]
             place = scene["place"]
+
+        # 新小说无简介且尚无设定会话时，引导作者填摘要作设定讨论种子（本轮内不重复问）；
+        # 有 synopsis 或已有 design_session（续跑/讨论中途）则不打扰。
+        eled = current_novel_root(config_dir)
+        synopsis_text = read_synopsis(eled) if eled else ""
+        design_sess_path = (Path(eled or "x") / "config" / "design_session.yaml") if eled else None
+        if (
+            eled
+            and not synopsis_text
+            and not (design_sess_path and design_sess_path.is_file())
+            and not synopsis_asked
+        ):
+            log.info("======== 小说简介 ========")
+            log.info("请为这本小说填一句话设定（将作为设定讨论的初始种子）。")
+            got = (input_fn or input)("简介（一句话设定，可回车跳过）：").strip()
+            if got:
+                write_synopsis(eled, got)
+                synopsis_text = got
+            synopsis_asked = True
+
         config_edited = run_design_phase(
             config_dir,
             runtime,
@@ -198,6 +223,7 @@ def main(input_fn: Callable[[str], str] | None = None) -> None:
             # Web 会话（nohup 无 stdin）会 EOFError。透传后设计阶段的交互（含危险覆盖确认）
             # 全部桥接前端 adapter。
             input_fn=input_fn,
+            synopsis=synopsis_text or None,
         )
         if config_edited:
             log.info("设定已编辑，重新加载配置与编排器。")

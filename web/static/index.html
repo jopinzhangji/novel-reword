@@ -154,9 +154,13 @@
   <section id="secRhythm" class="dimsec" hidden><h2>章节 · 节拍情志条</h2><div id="rhythm"></div></section>
   <section id="secConsole" class="dimsec" hidden><h2>作者控制台</h2>
     <div id="sessionBox" style="border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:6px"></div>
+    <h3 class="secsub">设定讨论 / 设定情况 <span class="mut" style="font-size:11px">（确定性快照：阶段 / 简介 / world / 设定方向 / 最近归档讨论）</span></h3>
+    <div id="discussionBox"></div>
     <div><h3 class="secsub">定制调整（能力 / 镜头 / 备选稿）</h3><div id="consoleBox"></div></div>
-    <h3 class="secsub">终端输出 <span class="mut" style="font-size:11px">（会话期引擎日志尾部，只读；实时流式留后续）</span></h3>
-    <pre id="termBox" class="term">（未开始作者在环会话，无终端输出）</pre>
+    <details class="termwrap">
+      <summary>终端输出（出错时展开详查）<span class="mut" style="font-size:11px">（会话期引擎日志尾部，只读）</span></summary>
+      <pre id="termBox" class="term">（未开始作者在环会话，无终端输出）</pre>
+    </details>
     <h3 class="secsub">小说正文情况 <span class="mut" style="font-size:11px">（scope 事件 `## 正文` 段；样例小说多为摘要）</span></h3>
     <div id="storyBox"></div>
   </section>
@@ -214,7 +218,7 @@ async function runDim(name){
   else if (name === "graph"){ if(currentSlug) await loadGraph(); }
   else if (name === "chars"){ if(currentSlug) await loadChars(); }
   else if (name === "rhythm"){ if(currentSlug) await loadRhythm(); }
-  else if (name === "console"){ if(currentSlug){ await loadConsole(); await loadStory(); await loadSession(); } }
+  else if (name === "console"){ if(currentSlug){ await loadConsole(); await loadStory(); await loadSession(); await loadDiscussion(); } }
   else if (name === "system"){ await loadSystem(); }
 }
 
@@ -604,6 +608,23 @@ function renderSession(s){
     }
   }
   startSessionPoll();
+  // §6.9：设定讨论进行中时，随轮询轻刷设定快照（确定性读口，best-effort）
+  if (currentSlug && s && (s.status === "active" || s.status === "pending")){
+    loadDiscussion().catch(()=>{});
+  }
+}
+
+function editSynopsisInline(){
+  const box = el("discussionBox"); if (!box) return;
+  const curEl = box.querySelector("input[name=synopsis]");
+  const cur = curEl ? curEl.value : (typeof currentSlug === "string" ? "" : "");
+  const got = prompt("小说简介（一句话设定；作为设定讨论种子）：", cur);
+  if (got === null || got === undefined) return;
+  const text = got.trim();
+  if (!text) return;
+  j(`/api/novels/${currentSlug}/synopsis`, { method:"PATCH",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ text }) }).then(()=>loadDiscussion()).catch(e=>alert("保存简介失败："+e.message));
 }
 
 async function loadStory(){
@@ -627,6 +648,55 @@ async function loadStory(){
       : `<div class="mut" style="font-size:12px;margin-top:4px">（无正文 / 摘要）</div>`;
     return `<div class="tl-row"><div><b style="color:var(--acc)">#${esc(String(e.turn))}</b> ${meta ? `<span class="mut">${meta}</span>` : ""} ${chars}</div>${bodyHtml}</div>`;
   }).join("") + `</div>`;
+}
+
+async function loadDiscussion(){
+  if (!currentSlug){ el("discussionBox").innerHTML = `<span class="noseq">请先选择一部小说。</span>`; return; }
+  let d;
+  try { d = await j(`/api/novels/${currentSlug}/discussion`); }
+  catch(e){ el("discussionBox").innerHTML = `<span class="noseq">读取设定/讨论失败：${esc(e.message)}</span>`; return; }
+  const ph = d.phase || {};
+  const phLabel = ph.phase || "（未开始）";
+  const badge = `<span class="badge">${esc(String(phLabel))}</span>` +
+    (ph.subphase ? `<span class="badge">${esc(String(ph.subphase))}</span>` : "");
+
+  // 简介（可编辑 + 保存，作设定讨论种子）
+  const syn = d.synopsis || "";
+  const synEdit = syn
+    ? `<div class="row"><span>简介</span><span>${esc(syn)}</span> · <button onclick="editSynopsisInline()">编辑</button></div>`
+    : `<div class="mut">尚未填写简介——新小说进作者在环时会引导填写，作为设定讨论的初始种子。</div>`;
+
+  // world
+  const w = d.world || {};
+  const scopes = (w.scopes||[]).map(s => `<span class="tag" title="${esc(s.description)}">${esc(s.name||s.id)}</span>`).join(" ");
+  const worldHtml = `<div class="row"><span>世界</span><span>${esc(w.name||"—")}${w.era?(" · "+esc(w.era)):""}</span></div>` +
+    (w.rules ? `<div class="mut" style="font-size:12px">${esc(w.rules)}</div>` : "") +
+    (scopes ? `<div style="margin-top:4px">${scopes}</div>` : "");
+
+  // 设定方向
+  const settings = (d.settings||[]).map(s => `
+    <div class="card small">
+      <b>${esc(s.name)}</b>
+      <div class="mut" style="font-size:12px">${esc(s.description)}</div>
+      <div class="mut" style="font-size:11px">等级 ${s.levels_count} · 章节 ${s.chapters_count}</div>
+    </div>`).join("");
+  const setHtml = settings
+    ? `<div class="grid">${settings}</div>`
+    : `<div class="mut">尚未生成设定方向（设定讨论会在填简介后产出）。</div>`;
+
+  // 最近归档讨论
+  const ds = d.discussion_summary || {};
+  const discHtml = ds.summary
+    ? `<div class="mut" style="font-size:12px">${esc(ds.summary)}</div>` +
+      (ds.last_updated ? `<div class="mut" style="font-size:11px">更新于 ${esc(ds.last_updated)}</div>` : "")
+    : `<div class="mut">尚无归档讨论摘要。</div>`;
+
+  el("discussionBox").innerHTML = `
+    <div class="row"><span>阶段</span><span>${badge}</span></div>
+    ${synEdit}
+    ${worldHtml}
+    <h4 class="secsub" style="font-size:12px;margin-top:8px">设定方向</h4>${setHtml}
+    <h4 class="secsub" style="font-size:12px;margin-top:8px">最近归档讨论</h4>${discHtml}`;
 }
 
 // 终端输出可圈选/复制：用户在 termBox 内 mousedown 到 mouseup/复制 期间挂起轮询全量替换，

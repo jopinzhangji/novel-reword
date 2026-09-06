@@ -236,6 +236,23 @@ auth:
 
 - **验收**：`PATCH /api/novels/{slug}/rename` 改书名真实落盘 meta/index/current_novel，slug 变化时目录改名；`system_status` 的 `framework.readonly=false`；`PATCH /api/system`（`framework`）落 per-novel `runtime.yaml` 顶层 `framework.llm_options` 且保留既有 `framework.llm`；无 LLM、无真实密钥写盘；全量回归保持绿。
 
+### 6.9 简介种子 + 控制台「设定讨论 / 设定情况」面板（2026-09-06）
+
+用户要求：**新小说命名后应引导填写简介，设定讨论由该简介先初始化一个设定**；**界面上应显示本阶段讨论/设定情况（已生成设定），而非让作者看终端输出**（终端输出降级为出错时详查）。承 §4 作品索引 + §6.7 控制台。
+
+**① 简介（synopsis）作设定种子（顺序微调不重排阶段）**：
+- **持久化**：`meta.yaml` 增 `synopsis` 字段（空串默认）。`novel_identity.py` 三处写 meta（`_ensure_provisional_novel_directory` / `_finalize_draft_novel_identity` / `persist_novel_identity`）均带 `synopsis`；**`_finalize_draft_novel_identity` 整表重建 meta 时保留既有 synopsis**；`rename_novel` 用 `{**meta,...}` 天然保留。新增 `read_synopsis`/`write_synopsis`（非空截断 500 字）。`workbench/common.novel_meta` 透出 `synopsis`。
+- **采集时机**：`run_novel_with_author.main` 在设定讨论前，若本小说 `synopsis` 为空**且尚无 `config/design_session.yaml`**（避免续跑/讨论中打扰），用 `input_fn` 引导「请填写小说简介（一句话设定，可回车跳过）」，非空则持久化并作种子（本轮内不重复问）。
+- **种子接入**：`design_phase.run_design_phase(..., synopsis=None)` 初始化 `reference = synopsis`；`_prompt_author_intent_for_setting_research` 增 `seed` 参——作者给 intent → `seed+"\n"+idea`；回车 → `seed`；无 seed → 原占位。正式命名仍「设定完成后」由设定生成书名候选（作者亦可随时在线改名）。
+
+**② 设定讨论 / 设定情况面板（确定性读口，无 LLM）**：
+- `src/workbench/discussion.py::discussion_snapshot(novel_root)` 返回：`phase`（`config/author_interaction_state.yaml` 的 `phase_state.phase/subphase`）、`synopsis`（meta）、`world`（复用 `load_world_config` 的 world.name/era/rules + scopes）、`settings`（`setting_research_output.yaml` 每 direction → `{name,description,levels_count,chapters_count}`）、`discussion_summary`（`design_session.yaml` 的 summary/last_updated/session_file）。全缺安全空。
+- `web/api/routers/novels.py`：`GET /api/novels/{slug}/discussion`；`PATCH /api/novels/{slug}/synopsis`（body `{text}`，写 meta.yaml）。
+- **前端**（`web/static/index.html` 无构建）：控制台 `sessionBox` 之后、终端之前插入「设定讨论 / 设定情况」`#discussionBox`，层级卡片渲染阶段徽标 + 简介(可编辑保存) + world + 设定方向卡 + 最近归档讨论摘要；`runDim("console")` 与每次 session 轮询后轻刷（best-effort，读盘确定性）。**终端输出降级**：`termBox` 外包 `<details><summary>终端输出（出错时展开详查）</summary>`，默认收起，`renderSession` 照常写内容。
+- **诚实标注**：面板呈现的是**已落盘的设定/已归档讨论**（`setting_research_output.yaml`/`world.yaml`/`design_session.yaml`），进行中的单轮原文仍以 `pending_prompt` 呈现，不即时回传引擎线内 conversation（Option-1 已足，实时原文留后续）。
+
+- **验收**：新小说进作者在环先被引导填简介→`meta.yaml.synopsis` 落盘→`run_design_phase` 首轮 reference 含该简介；`GET /api/novels/{slug}/discussion` 返回 phase/synopsis/world/settings/discussion_summary；`PATCH /api/novels/{slug}/synopsis` 落盘；控制台面板展示设定情况、终端默认收起、可展开详查；无 LLM；全量回归保持绿。
+
 ---
 
 ## 7. 分阶段落地
@@ -249,6 +266,7 @@ auth:
 | **GG5 `/system` 系统设置** | D9 §5.6 LLM/工作台互斥/联网面板 | 浏览器内读 effective 设置、改 `author_workbench.enabled` + `internet_search.*` + **LLM 工作参数白名单五子键（v2）** 落 per-novel `config/runtime.yaml`；get_post_set_state；provider 类型/密钥值仍只读不破启动链；全量回归保持绿 ✅（2026-08-31 §6.4；**2026-09-06 §6.8：LLM model/base_url/timeout/max_retries/api_key_env 可写，落 top-level `framework`**） |
 | **GG6 远程访问与鉴权** | 可配监听（`config/web_api.yaml` server.host/port）+ 密码登录（Basic Auth，可开关） | `python -m web.api.server` 按配置监听；`auth.enabled=true` 全站 Basic Auth（默认关不破本地/单测）；空口令启动报错不裸奔；口令恒等比较；全量回归保持绿 ✅（2026-08-31：详见 §6.5） |
 | **GG-W 工作台面板补全** | #2 五维成长雷达（`growth_radar` 确定性打分 + 前端 SVG 雷达）→ #3 迁移日志时间线 → #4 L1记忆·屏外线时间线 → #5 跨卡联动 → #6 两栏布局 + 控制台终端输出 / 小说正文 | 数据源复用 §4 确定性模块、纯前端渲染；default 不破；全量回归保持绿。**#2 ✅（2026-08-31：`character_detail` 增 `growth_radar`，`_GROWTH_DEPTH_SCALE=6` 截断，前端人物卡内嵌雷达）· #3 ✅（2026-08-31：人物卡增 `transition_log` turn 时间线）· #4 ✅（2026-08-31：人物卡增 L1 记忆 + 屏外线两节时间线）· #5 ✅（2026-08-31：`focusPerson` 跨卡联动——点人物卡/关系节点 → 人物卡高亮聚焦 + 心图跳该角色；详见 §6.6）· #6 ✅（2026-09-01：左导航维度 + 右内容两栏；控制台并入终端输出 tail（会话期根 logger 缓冲）+ 小说正文事件体 read port；详见 §6.7）** |
+| **简介种子 + 设定讨论/设定情况面板** | meta.yaml `synopsis` 字段 + 新小说进作者在环引导填简介作设定讨论种子；`discussion_snapshot` 确定性读口 + 控制台面板展示阶段/简介/world/设定方向/最近归档讨论，终端降级为出错详查 | 新小说先填简介→落盘 meta→`run_design_phase` 首轮 reference 含简介；`GET /api/novels/{slug}/discussion` 返回快照；`PATCH .../synopsis` 落盘；无 LLM；全量回归保持绿 ✅（2026-09-06：详见 §6.9） |
 
 ---
 
@@ -275,3 +293,4 @@ auth:
 - **2026-08-31**：G4 SDD 初稿；登记 **D13**；承接 D9 壳与 G1/G2/G3 六类数据面；明确「多小说进度 ⇄ 数据图谱 ⇄ 作者控制台」三主线。
 - **2026-09-01**：增 **§6.7 #6**——两栏布局（左导航维度 + 右内容、懒加载）+ 控制台右侧并入**终端输出 tail**（`session_runner` 会话期根 logger 缓冲，内存态、只读）与**小说正文 read port**（`story_events` 复用 scope 事件 body）；§7 增 #6 行。
 - **2026-09-06**：§6.4 LLM 行升 **v2 工作参数白名单可写**（`model`/`base_url`/`timeout`/`max_retries`/`api_key_env`，写 top-level `framework.llm_options`；provider 类型与密钥值仍只读）；增 **§6.8 在线书名编辑**（`rename_novel` 落 meta/index/current_novel，slug 变化时目录改名）；§7 GG5 行补可写项。
+- **2026-09-06**：增 **§6.9 简介种子 + 设定讨论/设定情况面板**——meta.yaml `synopsis` 字段持久化 + 新小说进作者在环引导填简介作 `run_design_phase` 设定讨论种子；`src/workbench/discussion.py::discussion_snapshot` 确定性读口 + `GET /api/novels/{slug}/discussion` + `PATCH .../synopsis`；控制台面板展示阶段/简介/world/设定方向/最近归档讨论，终端 `<details>` 降级为出错详查。

@@ -66,11 +66,13 @@ def _prompt_author_intent_for_setting_research(
     *,
     genre: str,
     theme: str,
+    seed: str | None = None,
 ) -> tuple[str, str]:
     """
     世界名为空时，在首次 agent.run 前向作者收集题材与核心说明，供 LLM 生成**非默认玄幻**的设定初稿。
 
     返回 (reference 片段, 用于本轮 agent 的 genre 字符串)。
+    seed 为作者事前填写的简介（meta.yaml synopsis）：作为初始设定种子并入 reference。
     """
     logger.info("======== 首次设定初稿：请先说明作品方向 ========")
     logger.info(
@@ -89,7 +91,9 @@ def _prompt_author_intent_for_setting_research(
     ).strip()
     new_genre = genre_in or genre or "架空"
     if idea:
-        ref = idea
+        ref = f"{seed}\n{idea}" if seed else idea
+    elif seed:
+        ref = seed
     else:
         ref = (
             "作者暂未逐条说明剧情。题材标签：「{}」。请生成与该标签**一致**的轻度设定骨架；"
@@ -891,12 +895,14 @@ def run_design_phase(
     characters_config: dict,
     *,
     input_fn: Callable[[str], str] | None = None,
+    synopsis: str | None = None,
 ) -> bool:
     """
     开书前设定阶段：运行设定研究 Agent，展示世界模型与设定，与作者交互完善。
     当前：y 确认进入正篇 / e 编辑设定文件 / s 补充说明并重新生成；选 y 即结束。
     目标（DESIGN §6.6）：支持按方向讨论（每次答复仅针对该方向）→ 作者满意后提炼进整体 → 再问修改/继续讨论/设定完成，仅作者明确「设定完成」时才结束。
     返回 True 表示用户曾选择过「e」编辑设定，调用方应重新加载配置并重建编排器后再进入回合。
+    synopsis 为作者事前填写的简介（meta.yaml synopsis），作为初始设定种子并入首轮 reference。
     """
     config_dir = Path(config_dir)
     session = AuthorSession.for_design_phase(
@@ -911,7 +917,7 @@ def run_design_phase(
     theme = (world_config.get("world") or {}).get("name") or "未命名世界"
     inner_world = world_config.get("world") or world_config
     genre = inner_world.get("era") or inner_world.get("genre") or "架空"
-    reference: str | None = None
+    reference: str | None = (synopsis or "").strip() or None
     config_was_edited = False
 
     logger.debug("[设定讨论] run_design_phase: 开始, config_dir=%s", config_dir)
@@ -962,7 +968,7 @@ def run_design_phase(
                     "_author_setting_intent_collected"
                 ):
                     ref_add, genre = _prompt_author_intent_for_setting_research(
-                        session, genre=genre, theme=theme
+                        session, genre=genre, theme=theme, seed=(synopsis or "").strip() or None
                     )
                     session.extra["_author_setting_intent_collected"] = True
                     reference = ref_add if not reference else f"{reference}\n{ref_add}"

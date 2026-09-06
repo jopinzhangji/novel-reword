@@ -139,3 +139,18 @@ def test_rename_via_http(project, client):
 def test_rename_empty_via_http_400(project, client):
     r = client.patch("/api/novels/alpha/rename", json={"title": "  "})
     assert r.status_code == 400
+
+
+def test_discussion_and_synopsis_via_http(project, client):
+    # §6.9 GET /discussion 确定性快照 + PATCH /synopsis 落 meta
+    d = client.get("/api/novels/alpha/discussion").json()
+    assert d["synopsis"] == ""          # make_project 无 synopsis
+    assert "world" in d and "settings" in d and "discussion_summary" in d
+    assert d["phase"]["phase"] is None
+    # 写 synopsis
+    r = client.patch("/api/novels/alpha/synopsis", json={"text": "近未来火星殖民官场"}).json()
+    assert r["synopsis"] == "近未来火星殖民官场"
+    d2 = client.get("/api/novels/alpha/discussion").json()
+    assert d2["synopsis"] == "近未来火星殖民官场"
+    # 空简介拒绝
+    assert client.patch("/api/novels/alpha/synopsis", json={"text": "  "}).status_code == 400

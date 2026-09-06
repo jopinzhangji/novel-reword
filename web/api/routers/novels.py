@@ -1,10 +1,11 @@
-"""G4b novels router：作品索引 / 单书摘要 / 在线书名编辑。"""
+"""G4b novels router：作品索引 / 单书摘要 / 在线书名编辑 / 设定讨论读口。"""
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from src.workbench import novels
+from src.workbench import discussion, novels
+from src.workbench.common import novel_meta
 from web.api.routers.common import project_root, resolve_novel_root
 
 router = APIRouter(tags=["novels"])
@@ -14,9 +15,32 @@ class RenameBody(BaseModel):
     title: str
 
 
+class SynopsisBody(BaseModel):
+    text: str
+
+
 @router.get("/novels")
 def list_novels(request: Request) -> list[dict]:
     return novels.index_novels(project_root(request))
+
+
+@router.get("/novels/{slug}/discussion")
+def novel_discussion(request: Request, slug: str) -> dict:
+    """D13 §6.9 设定讨论/设定情况快照（确定性读口，无 LLM）。"""
+    return discussion.discussion_snapshot(resolve_novel_root(request, slug))
+
+
+@router.patch("/novels/{slug}/synopsis")
+def update_synopsis(request: Request, slug: str, body: SynopsisBody) -> dict:
+    """D13 §6.9 写小说简介到 meta.yaml（作设定讨论种子）。"""
+    from src.author_loop.novel_identity import write_synopsis
+
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="简介不能为空")
+    root = resolve_novel_root(request, slug)
+    write_synopsis(root, body.text)
+    return {"synopsis": novel_meta(root).get("synopsis") or ""}
 
 
 @router.get("/novels/{slug}/summary")

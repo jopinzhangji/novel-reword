@@ -22,6 +22,57 @@ def test_slugify_title():
     assert slugify_title("!!!") == "novel"
 
 
+def test_synopsis_round_trip_and_truncate(tmp_path: Path):
+    """read_synopsis/write_synopsis 读写 meta.yaml，非空截断 500 字。"""
+    novel_root = tmp_path / "novel"
+    novel_root.mkdir(parents=True)
+    _write_yaml(novel_root / "meta.yaml", {"slug": "alpha", "title": "火星", "status": "draft"})
+    assert ni.read_synopsis(novel_root) == ""  # 缺省空
+    long = "字" * 600
+    ni.write_synopsis(novel_root, long)
+    assert len(ni.read_synopsis(novel_root)) == 500
+    ni.write_synopsis(novel_root, "  近未来火星殖民  ")
+    assert ni.read_synopsis(novel_root) == "近未来火星殖民"
+    # write 空串 → 存空
+    ni.write_synopsis(novel_root, "   ")
+    assert ni.read_synopsis(novel_root) == ""
+
+
+def test_finalize_draft_preserves_synopsis(tmp_path: Path):
+    """初稿确认书名（_finalize_draft_novel_identity）整表重建 meta 时保留既有 synopsis。"""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    data = tmp_path / "data"
+    novels_root = data / "novels"
+    novels_root.mkdir(parents=True)
+    slug = "draft-preserve"
+    novel_root = novels_root / slug
+    novel_root.mkdir(parents=True)
+    (novel_root / "config").mkdir(parents=True)
+    _write_yaml(
+        novel_root / "meta.yaml",
+        {"title": "（初稿）待命名", "slug": slug, "status": "draft",
+         "created_at": "2026-01-01T00:00:00Z", "synopsis": "近未来火星殖民官场"},
+    )
+    _write_yaml(
+        config_dir / "current_novel.yaml",
+        {"slug": slug, "title": "（初稿）待命名", "root": str(novel_root), "provisional": True},
+    )
+    runtime = {"runtime": {"storage": {"data_root": str(data)}}}
+    out = persist_novel_identity(
+        config_dir=config_dir,
+        project_root=tmp_path,
+        runtime_config=runtime,
+        title="火星官场",
+        world_config={"world": {"name": "火星殖民"}},
+        characters_config={"characters": [{"id": "方舟"}]},
+    )
+    root = Path(out["root"])
+    meta = yaml.safe_load((root / "meta.yaml").read_text(encoding="utf-8")) or {}
+    assert meta.get("status") == "design_done"
+    assert meta.get("synopsis") == "近未来火星殖民官场"
+
+
 def test_persist_novel_identity_finalizes_draft(tmp_path: Path):
     """初稿目录（draft）上确认书名时更新 meta / 可能重命名目录。"""
     config_dir = tmp_path / "config"

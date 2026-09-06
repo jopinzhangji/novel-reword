@@ -116,6 +116,7 @@ def ensure_provisional_novel_directory(
         "status": "draft",
         "created_at": _now_iso(),
         "world_name": (world_config.get("world") or {}).get("name") or "",
+        "synopsis": "",
     }
     _write_yaml(novel_root / "meta.yaml", meta)
     _write_yaml(novel_root / "config" / "runtime.yaml", _build_novel_runtime_snapshot(runtime_config, novel_root))
@@ -247,14 +248,15 @@ def _finalize_draft_novel_identity(
         novel_root.rename(target)
         novel_root = target
 
+    prev = _read_yaml(novel_root / "meta.yaml")
     meta = {
         "title": title.strip(),
         "slug": new_slug,
         "status": "design_done",
         "created_at": _now_iso(),
         "world_name": (world_config.get("world") or {}).get("name") or "",
+        "synopsis": (prev.get("synopsis") or "") if isinstance(prev, dict) else "",
     }
-    prev = _read_yaml(novel_root / "meta.yaml")
     if isinstance(prev, dict) and prev.get("created_at"):
         meta["created_at"] = prev["created_at"]
     _write_yaml(novel_root / "meta.yaml", meta)
@@ -326,6 +328,7 @@ def persist_novel_identity(
         "status": "design_done",
         "created_at": _now_iso(),
         "world_name": (world_config.get("world") or {}).get("name") or "",
+        "synopsis": "",
     }
     _write_yaml(novel_root / "meta.yaml", meta)
     _write_yaml(novel_root / "config" / "runtime.yaml", _build_novel_runtime_snapshot(runtime_config, novel_root))
@@ -436,4 +439,24 @@ def confirm_title_and_persist(
             return out
         if log:
             log.info("超出范围，请重试。")
+
+
+_SYNOPSIS_MAX_CHARS = 500
+
+
+def read_synopsis(novel_root: Path) -> str:
+    """读取 meta.yaml 的 synopsis（无则空串）。"""
+    meta = _read_yaml(novel_root / "meta.yaml")
+    return str(meta.get("synopsis") or "").strip()
+
+
+def write_synopsis(novel_root: Path, text: str) -> str:
+    """写 meta.yaml 的 synopsis（非空截断 500 字），返回实际写入值（可能为空串）。"""
+    clean = (text or "").strip()
+    if len(clean) > _SYNOPSIS_MAX_CHARS:
+        clean = clean[:_SYNOPSIS_MAX_CHARS]
+    meta = _read_yaml(novel_root / "meta.yaml")
+    meta["synopsis"] = clean
+    _write_yaml(novel_root / "meta.yaml", meta)
+    return clean
 
