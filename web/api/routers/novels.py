@@ -30,6 +30,12 @@ def novel_discussion(request: Request, slug: str) -> dict:
     return discussion.discussion_snapshot(resolve_novel_root(request, slug))
 
 
+@router.get("/novels/{slug}/discussion/archive")
+def novel_discussion_archive(request: Request, slug: str) -> dict:
+    """D13 §6.9 最近归档设定讨论的完整内容（确定性读口；摘要 + 完整对话轮次/审阅摘要）。"""
+    return discussion.archived_discussion_detail(resolve_novel_root(request, slug))
+
+
 @router.patch("/novels/{slug}/synopsis")
 def update_synopsis(request: Request, slug: str, body: SynopsisBody) -> dict:
     """D13 §6.9 写小说简介到 meta.yaml（作设定讨论种子）。"""

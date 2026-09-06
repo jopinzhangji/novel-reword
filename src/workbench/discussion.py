@@ -124,6 +124,111 @@ def _discussion_summary(novel_root: Path) -> dict:
     }
 
 
+def _blocks_from_events(events: list) -> list[dict]:
+    """把 session_<ts>.yaml 的 events 规整为前端可渲染的 blocks 列表（确定性、无 LLM）。"""
+    blocks: list[dict] = []
+    for ev in events or []:
+        if not isinstance(ev, dict):
+            continue
+        t = ev.get("type")
+        ts = safe_str(ev.get("timestamp"))
+        if t == "discussion":
+            rounds = []
+            for r in (ev.get("rounds") or []):
+                if isinstance(r, dict):
+                    rounds.append({"author": safe_str(r.get("author")), "agent": safe_str(r.get("agent"))})
+            blocks.append(
+                {
+                    "kind": "discussion",
+                    "timestamp": ts,
+                    "initial_message": safe_str(ev.get("initial_message")),
+                    "rounds": rounds,
+                    "extracted_directions": [safe_str(x) for x in (ev.get("extracted_directions") or [])],
+                }
+            )
+        elif t == "summary":
+            blocks.append(
+                {
+                    "kind": "summary",
+                    "timestamp": ts,
+                    "world": [safe_str(x) for x in (ev.get("world") or [])],
+                    "scopes": [safe_str(x) for x in (ev.get("scopes") or [])],
+                    "characters": [safe_str(x) for x in (ev.get("characters") or [])],
+                    "special": [safe_str(x) for x in (ev.get("special") or [])],
+                }
+            )
+        elif t == "menu":
+            blocks.append({"kind": "menu", "timestamp": ts, "choice": safe_str(ev.get("choice"))})
+        elif t == "supplement":
+            blocks.append({"kind": "supplement", "timestamp": ts, "reference": safe_str(ev.get("reference"))})
+        else:
+            blocks.append({"kind": safe_str(t) or "event", "timestamp": ts})
+    return blocks
+
+
+def archived_discussion_detail(novel_root) -> dict:
+    """最近归档设定讨论的完整内容（确定性读口，无 LLM）。
+
+    索引（config/design_session.yaml）只含摘要 + session_file；完整对话落盘在
+    book/setting/sessions/session_<ts>.md（及同名 .yaml）。这里优先读结构化 .yaml 的
+    events 规整为 blocks；仅存 .md 时回退给原文 markdown；全缺只回索引摘要。
+    session_file 为相对 data_root 的路径，故相对 novel_root 解析（须落在 novel_root 内）。
+    """
+    novel_root = Path(novel_root)
+    summary = _discussion_summary(novel_root)
+    session_file = summary.get("session_file", "")
+    blocks: list[dict] = []
+    raw_markdown = ""
+    source = "index_only"
+
+    yaml_path = md_path = None
+    if session_file:
+        base = Path(session_file)
+        yaml_path = novel_root / base.parent / f"{base.stem}.yaml"
+        md_path = novel_root / base
+        root_res = novel_root.resolve()
+        yaml_path = yaml_path if yaml_path.resolve().is_relative_to(root_res) else None
+        md_path = md_path if md_path.resolve().is_relative_to(root_res) else None
+
+    if yaml_path is not None and yaml_path.is_file():
+        data = read_yaml(yaml_path) or {}
+        blocks = _blocks_from_events(data.get("events"))
+        if not blocks:
+            cur = (data.get("state_snapshot") or {}).get("current_discussion")
+            if isinstance(cur, dict):
+                blocks = [
+                    {
+                        "kind": "discussion",
+                        "timestamp": "",
+                        "initial_message": safe_str(cur.get("initial_message")),
+                        "rounds": [
+                            {"author": safe_str(r.get("author")), "agent": safe_str(r.get("agent"))}
+                            for r in (cur.get("rounds") or [])
+                            if isinstance(r, dict)
+                        ],
+                        "extracted_directions": [],
+                    }
+                ]
+        if blocks:
+            source = "yaml"
+    elif md_path is not None and md_path.is_file():
+        try:
+            raw_markdown = md_path.read_text(encoding="utf-8")
+            source = "md"
+        except Exception:  # noqa: BLE001 — 读口尽力而为
+            pass
+
+    return {
+        "summary": summary.get("summary", ""),
+        "last_updated": summary.get("last_updated", ""),
+        "session_file": session_file,
+        "has_archive": bool(session_file or blocks),
+        "source": source,
+        "blocks": blocks,
+        "raw_markdown": raw_markdown,
+    }
+
+
 def _suggestion(phase: dict, synopsis: str, world: dict, settings: list, design_present: bool) -> str:
     """确定性「当前建议」：据阶段/简介/世界/设定方向推导下一步动作，无 LLM。"""
     ph = (phase or {}).get("phase")

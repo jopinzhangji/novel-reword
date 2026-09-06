@@ -173,6 +173,11 @@
 let currentSlug = null;
 let focusChar = "";   // 面板 #5 跨卡联动：当前聚焦角色 id（空=全部）
 let _sessionDomSig = null;  // §6.3 作者在环：会话 DOM 重绘签名（无变化不重建，保 IME/光标）
+// §6.9 归档讨论下钻：展开态 + 已加载详情 HTML（跨轮询保留，切小说时重置）
+let _archiveOpen = false;
+let _archiveLoaded = false;
+let _archiveHtml = "";
+let _archiveSlug = "";
 
 async function j(path, opts) {
   const r = await fetch(path, opts);
@@ -658,6 +663,11 @@ async function loadStory(){
 }
 
 async function loadDiscussion(){
+  // 切到另一部小说时重置归档下钻状态（展开态/缓存详情按 slug 隔离）
+  if (_archiveSlug !== String(currentSlug || "")){
+    _archiveSlug = String(currentSlug || "");
+    _archiveOpen = false; _archiveLoaded = false; _archiveHtml = "";
+  }
   if (!currentSlug){ el("discussionBox").innerHTML = `<span class="noseq">请先选择一部小说。</span>`; return; }
   let d;
   try { d = await j(`/api/novels/${currentSlug}/discussion`); }
@@ -722,11 +732,22 @@ async function loadDiscussion(){
       <h4 class="secsub" style="font-size:12px;margin-top:8px">设定方向</h4>${setHtml}
     </div>`;
 
+  // —— 最近归档讨论：独立分区，总结输出常驻；可点击下钻进完整对话详情 ——
   const ds = d.discussion_summary || {};
-  const discHtml = ds.summary
+  const archSummary = ds.summary
     ? `<div class="mut" style="font-size:12px;white-space:pre-wrap">${esc(ds.summary)}</div>` +
       (ds.last_updated ? `<div class="mut" style="font-size:11px">更新于 ${esc(ds.last_updated)}</div>` : "")
     : `<div class="mut">尚无归档讨论摘要。</div>`;
+  const detailHtml = _archiveOpen ? (_archiveLoaded ? _archiveHtml : `<div class="mut">加载归档讨论详情…</div>`) : "";
+  const archiveSection = `
+    <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">
+      <div class="row">
+        <span>最近归档讨论</span>
+        <button onclick="toggleArchive()">${_archiveOpen ? "收起归档详情 ▴" : "查看归档详情 ▾"}</button>
+      </div>
+      ${archSummary}
+      ${detailHtml}
+    </div>`;
 
   el("discussionBox").innerHTML = `
     <div>
@@ -735,10 +756,52 @@ async function loadDiscussion(){
       ${suggHtml}
       ${reviewHtml}
     </div>
-    <details open>
-      <summary style="cursor:pointer;margin-top:8px" ondblclick="event.preventDefault()">最近归档讨论（下转）</summary>
-      ${discHtml}
-    </details>`;
+    ${archiveSection}`;
+}
+
+// —— 归档讨论下钻：点击开关 → 拉取完整对话详情（确定性读口），展开/收起 ——
+function toggleArchive(){
+  _archiveOpen = !_archiveOpen;
+  if (_archiveOpen) loadArchiveDetail();   // 首次展开才拉取；收起保留已缓存详情
+  loadDiscussion();
+}
+async function loadArchiveDetail(){
+  if (!currentSlug) return;
+  try {
+    const a = await j(`/api/novels/${currentSlug}/discussion/archive`);
+    _archiveHtml = renderArchiveDetail(a);
+  } catch(e){ _archiveHtml = `<div class="noseq">读取归档详情失败：${esc(e.message)}</div>`; }
+  _archiveLoaded = true;
+  loadDiscussion();
+}
+function renderArchiveDetail(a){
+  if (!a.blocks || !a.blocks.length){
+    if (a.raw_markdown){
+      return `<pre class="mut" style="white-space:pre-wrap;font-size:12px;max-height:360px;overflow:auto">${esc(a.raw_markdown)}</pre>`;
+    }
+    return `<div class="mut">暂无归档对话详情（仅索引摘要：session_file=${esc(a.session_file||"—")}）。</div>`;
+  }
+  return a.blocks.map(b => {
+    if (b.kind === "discussion"){
+      const init = b.initial_message ? `<div class="mut" style="font-size:12px"><b>发起</b>：${esc(b.initial_message)}</div>` : "";
+      const rounds = (b.rounds||[]).map(r =>
+        `<div style="margin-top:6px">
+           <span class="tag">作者</span><div class="mut" style="white-space:pre-wrap;font-size:12px">${esc(r.author)}</div>
+           <span class="tag">设定 Agent</span><div class="mut" style="white-space:pre-wrap;font-size:12px">${esc(r.agent)}</div>
+         </div>`).join("");
+      const dirs = (b.extracted_directions||[]).length
+        ? `<div class="mut" style="font-size:11px">归纳方向：${esc((b.extracted_directions||[]).join(", "))}</div>` : "";
+      return `<div class="card small"><b>设定讨论${b.timestamp ? " · " + esc(b.timestamp) : ""}</b>${init}${rounds}${dirs}</div>`;
+    }
+    if (b.kind === "summary"){
+      const kv = [["世界",b.world],["范围",b.scopes],["角色",b.characters],["特殊设定",b.special]]
+        .filter(([,v])=>v && v.length)
+        .map(([k,v])=>`<div class="mut" style="font-size:12px"><b>${esc(k)}</b>：${esc((v||[]).join("；"))}</div>`).join("");
+      return `<div class="card small"><b>设定审阅摘要${b.timestamp ? " · " + esc(b.timestamp) : ""}</b>${kv}</div>`;
+    }
+    const val = b.choice || b.reference || "";
+    return `<div class="card small"><b>${esc(b.kind)}</b>${b.timestamp ? " <span class='mut'>" + esc(b.timestamp) + "</span>" : ""}${val ? `<div class="mut" style="font-size:12px;white-space:pre-wrap">${esc(val)}</div>` : ""}</div>`;
+  }).join("");
 }
 
 // 终端输出可圈选/复制：用户在 termBox 内 mousedown 到 mouseup/复制 期间挂起轮询全量替换，

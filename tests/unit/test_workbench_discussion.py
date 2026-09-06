@@ -95,3 +95,81 @@ def test_discussion_snapshot_missing_files_safe(tmp_path):
     assert snap["settings"] == []
     assert snap["discussion_summary"]["summary"] == ""
     assert "suggestion" in snap and "status" in snap
+
+def test_archived_discussion_detail_yaml(tmp_path):
+    """归档讨论下钻：session_file 指向的 .yaml 结构化 events 被规整为 blocks。"""
+    from src.workbench.discussion import archived_discussion_detail
+    from tests.unit.workbench_support import write_yaml
+
+    _proj, roots = make_project(tmp_path, ("alpha",))
+    root = roots["alpha"]
+    # 索引只存摘要 + session_file
+    write_yaml(
+        root / "config" / "design_session.yaml",
+        {"summary": "探讨了技术阶段与职级", "last_updated": "2026-09-06",
+         "session_file": "book/setting/sessions/session_20260906_120000.md"},
+    )
+    # 完整对话写入 book/setting/sessions/session_<ts>.yaml（与 .md 同名）
+    write_yaml(
+        root / "book" / "setting" / "sessions" / "session_20260906_120000.yaml",
+        {
+            "events": [
+                {"type": "discussion", "timestamp": "T1",
+                 "initial_message": "想写火星殖民官场",
+                 "rounds": [{"author": "主要写政斗", "agent": "建议技术阶段分五级"},
+                            {"author": "老板", "agent": "职级设拓荒者/执政官"}],
+                 "extracted_directions": ["power_system", "level_system"]},
+                {"type": "summary", "timestamp": "T2",
+                 "world": ["火星殖民"], "scopes": ["殖民站"], "characters": [], "special": []},
+            ],
+            "state_snapshot": {},
+        },
+    )
+    det = archived_discussion_detail(root)
+    assert det["has_archive"] is True
+    assert det["source"] == "yaml"
+    assert det["summary"] == "探讨了技术阶段与职级"
+    kinds = [b["kind"] for b in det["blocks"]]
+    assert kinds == ["discussion", "summary"]
+    d, s = det["blocks"]
+    assert d["initial_message"] == "想写火星殖民官场"
+    assert len(d["rounds"]) == 2
+    assert d["rounds"][0] == {"author": "主要写政斗", "agent": "建议技术阶段分五级"}
+    assert d["extracted_directions"] == ["power_system", "level_system"]
+    assert s["world"] == ["火星殖民"]
+
+
+def test_archived_discussion_detail_md_fallback(tmp_path):
+    """仅存 .md（无同名 .yaml）时回退给原文 markdown。"""
+    from src.workbench.discussion import archived_discussion_detail
+    from tests.unit.workbench_support import write_yaml, write_txt
+
+    _proj, roots = make_project(tmp_path, ("alpha",))
+    root = roots["alpha"]
+    write_yaml(
+        root / "config" / "design_session.yaml",
+        {"summary": "s", "last_updated": "2026-09-06",
+         "session_file": "book/setting/sessions/session_20260906_090000.md"},
+    )
+    write_txt(root / "book" / "setting" / "sessions" / "session_20260906_090000.md",
+              "# 设定会话\n\n## [1] discussion T\n- **作者**：\n主要写政斗\n")
+    det = archived_discussion_detail(root)
+    assert det["source"] == "md"
+    assert "# 设定会话" in det["raw_markdown"]
+
+
+def test_archived_discussion_detail_index_only_safe(tmp_path):
+    """无 .yaml/.md 时只回索引摘要，不抛错。"""
+    from src.workbench.discussion import archived_discussion_detail
+    from tests.unit.workbench_support import write_yaml
+
+    _proj, roots = make_project(tmp_path, ("alpha",))
+    root = roots["alpha"]
+    write_yaml(
+        root / "config" / "design_session.yaml",
+        {"summary": "s", "last_updated": "2026-09-06"},  # 无 session_file
+    )
+    det = archived_discussion_detail(root)
+    assert det["source"] == "index_only"
+    assert det["blocks"] == []
+    assert det["has_archive"] is False  # 仅摘要无 file/blocks
