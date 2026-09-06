@@ -68,12 +68,15 @@ def _prompt_author_intent_for_setting_research(
     genre: str,
     theme: str,
     seed: str | None = None,
+    novel_root: Path | None = None,
 ) -> tuple[str, str]:
     """
     世界名为空时，在首次 agent.run 前向作者收集题材与核心说明，供 LLM 生成**非默认玄幻**的设定初稿。
 
     返回 (reference 片段, 用于本轮 agent 的 genre 字符串)。
     seed 为作者事前填写的简介（meta.yaml synopsis）：作为初始设定种子并入 reference。
+    若本无简介种子（seed 为空）而作者在此补填了 idea，将 idea 一并持久化到 meta.yaml synopsis，
+    供「设定讨论 / 设定情况」面板读取（否则终端看到内容但面板/建议仍报「未填简介」）。
     """
     logger.info("======== 首次设定初稿：请先说明作品方向 ========")
     logger.info(
@@ -93,6 +96,9 @@ def _prompt_author_intent_for_setting_research(
     new_genre = genre_in or genre or "架空"
     if idea:
         ref = f"{seed}\n{idea}" if seed else idea
+        # 无既有简介种子而作者在此补填了核心 → 持久化为简介，供面板/建议读取
+        if novel_root is not None and not seed:
+            write_synopsis(novel_root, idea)
     elif seed:
         ref = seed
     else:
@@ -981,7 +987,11 @@ def run_design_phase(
                     "_author_setting_intent_collected"
                 ):
                     ref_add, genre = _prompt_author_intent_for_setting_research(
-                        session, genre=genre, theme=theme, seed=(synopsis or "").strip() or None
+                        session,
+                        genre=genre,
+                        theme=theme,
+                        seed=(synopsis or "").strip() or None,
+                        novel_root=current_novel_root(config_dir),
                     )
                     session.extra["_author_setting_intent_collected"] = True
                     reference = ref_add if not reference else f"{reference}\n{ref_add}"

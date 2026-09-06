@@ -41,6 +41,27 @@ def test_seed_none_falls_back_placeholder():
     assert "作者暂未逐条说明剧情" in ref
 
 
+def test_bootstrap_idea_persist_when_no_synopsis(tmp_path):
+    """无简介种子而作者在首次设定引导补填核心 → 持久化为 meta.yaml synopsis（供面板/建议读取）。"""
+    import yaml
+
+    from src.author_loop.novel_identity import read_synopsis
+
+    novel_root = tmp_path / "data" / "novels" / "alpha"
+    novel_root.mkdir(parents=True, exist_ok=True)
+    # 已有 meta.yaml 但尚无 synopsis（相当于"未填简介"）
+    (novel_root / "meta.yaml").write_text(
+        yaml.safe_dump({"slug": "alpha", "title": "火星"}, allow_unicode=True), encoding="utf-8"
+    )
+
+    s = _Session(["硬科幻，火星官场斗争", ""])  # idea 后跟 genre 输入
+    ref, _genre = _prompt_author_intent_for_setting_research(
+        s, genre="", theme="未命名世界", seed=None, novel_root=novel_root
+    )
+    assert "硬科幻，火星官场斗争" in ref
+    assert read_synopsis(novel_root) == "硬科幻，火星官场斗争"
+
+
 def test_run_design_phase_reference_initialized_from_synopsis(tmp_path, monkeypatch):
     """run_design_phase(synopsis=...) 首轮 agent.run 的 reference 含该 synopsis（经 seed 并入）。"""
     from src.author_loop import design_phase as dp
@@ -57,7 +78,7 @@ def test_run_design_phase_reference_initialized_from_synopsis(tmp_path, monkeypa
 
     monkeypatch.setattr(dp, "SettingResearchAgent", _Agent)
     monkeypatch.setattr(
-        dp, "_prompt_author_intent_for_setting_research", lambda s, *, genre, theme, seed=None: ("SEED-LINE", "科幻")
+        dp, "_prompt_author_intent_for_setting_research", lambda s, *, genre, theme, seed=None, **kw: ("SEED-LINE", "科幻")
     )
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)

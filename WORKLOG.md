@@ -15,6 +15,17 @@
 
 ## 2026-09-06
 
+### 首次设定引导补填的核心未持久化 → 面板/建议不显示简介（D13 §6.9，`design_phase`）
+
+- **需求（用户反馈）**：`setting_intent_bootstrap` 阶段（世界空、无简介）终端输出能看到作者填写的设定方向内容，但「设定讨论/设定情况」面板下无简介，「当前建议」也不体现（仍报「未填简介先补种子」）。
+- **根因**：`_prompt_author_intent_for_setting_research` 把作者 idea 并进本轮 `reference`（仅内存）给 SettingResearchAgent，但**未持久化到 `meta.yaml` synopsis**；`discussion_snapshot` 读盘 → 面板/建议只见空简介与「未填简介」建议。与上一项「重新生成覆盖」不同，此处是**首次设定引导**（fresh bootstrap）路径未落盘。
+- **修法（`src/author_loop/design_phase.py`）**：`_prompt_author_intent_for_setting_research` 增 `novel_root` 参；当**无既有简介种子（seed 空）且作者在此补填 idea** 时，`write_synopsis(novel_root, idea)` 持久化到 meta.yaml → 面板读口直接呈现、建议不再报「未填简介」。`run_design_phase` 调用处传 `novel_root=current_novel_root(config_dir)`。
+- **测试**：`test_design_phase_seed.py` 增 `bootstrap_idea_persist_when_no_synopsis`（已有 meta 无 synopsis + 作者补填 → `read_synopsis` 落盘）；既有 mock `_prompt_author_intent...` 补 `**kw` 兼容新参。全量回归 **491 通过 + 1 跳过**。
+
+---
+
+## 2026-09-06
+
 ### 重新生成设定时无简介 → 引导先填简介作种子（D13 §6.9，`run_design_phase`）
 
 - **需求（用户反馈）**：作者确认「重新生成设定、覆盖现有设定」且本小说无简介时，没有跳转到先填简介，直接以空种子重生成。
