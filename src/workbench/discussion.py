@@ -25,7 +25,10 @@ def _phase_from_state(novel_root: Path) -> dict:
 
 
 def _settings_from_file(novel_root: Path) -> list[dict]:
-    """读 config/setting_research_output.yaml，每方向 → {name, description, levels_count, chapters_count}。"""
+    """读 config/setting_research_output.yaml，每方向 → {name, description, levels_count, chapters_count, levels, chapters}。
+
+    levels/chapters 各为「具体条目」数组（{name, note}），供面板在「当前建议/当前设定情况」直接呈现具体内容（非仅计数）。
+    """
     path = Path(novel_root) / "config" / "setting_research_output.yaml"
     data = read_yaml(path)
     if not isinstance(data, dict):
@@ -41,8 +44,41 @@ def _settings_from_file(novel_root: Path) -> list[dict]:
                 "description": safe_str(val.get("description")),
                 "levels_count": _size(val.get("levels")),
                 "chapters_count": _size(val.get("chapters")),
+                "levels": _item_list(val.get("levels")),
+                "chapters": _item_list(val.get("chapters")),
             }
         )
+    return out
+
+
+def _world_meta_from_setting_research(novel_root: Path) -> dict:
+    """读 setting_research_output.yaml 顶层的 world_brief / genre，供面板呈现「世界模型」概述。"""
+    data = read_yaml(Path(novel_root) / "config" / "setting_research_output.yaml")
+    if not isinstance(data, dict):
+        return {"world_brief": "", "genre": ""}
+    genre = safe_str(data.get("genre")) or data.get("theme") or ""
+    return {
+        "world_brief": safe_str(data.get("world_brief")),
+        "genre": genre,
+    }
+
+
+def _item_list(value) -> list[dict]:
+    """把 levels/chapters 条目规整为 [{name, note}]（缺省 note 空串）。"""
+    if not isinstance(value, (list, dict)):
+        return []
+    items = list(value.values()) if isinstance(value, dict) else list(value)
+    out = []
+    for it in items:
+        if isinstance(it, dict):
+            out.append(
+                {
+                    "name": safe_str(it.get("name")) or safe_str(it.get("id")) or "",
+                    "note": safe_str(it.get("note")) or safe_str(it.get("description")),
+                }
+            )
+        elif isinstance(it, str):
+            out.append({"name": it.strip(), "note": ""})
     return out
 
 
@@ -128,6 +164,7 @@ def discussion_snapshot(novel_root) -> dict:
     world = _world_from_file(novel_root)
     settings = _settings_from_file(novel_root)
     summary = _discussion_summary(novel_root)
+    world_meta = _world_meta_from_setting_research(novel_root)
     design_present = bool(summary.get("summary"))
     status = {
         "has_synopsis": bool(synopsis),
@@ -141,6 +178,8 @@ def discussion_snapshot(novel_root) -> dict:
     return {
         "phase": phase,
         "synopsis": synopsis,
+        "world_brief": world_meta.get("world_brief"),
+        "genre": world_meta.get("genre"),
         "suggestion": _suggestion(phase, synopsis, world, settings, design_present),
         "status": status,
         "world": world,

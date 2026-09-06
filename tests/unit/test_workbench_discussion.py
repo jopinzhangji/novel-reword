@@ -19,8 +19,10 @@ def _build(root: Path) -> None:
         root / "config" / "setting_research_output.yaml",
         {
             "version": 1,
-            "power_system": {"name": "技术阶段", "description": "曲率引擎等级", "levels": [{"id": "l1"}]},
-            "level_system": {"name": "职级", "description": "殖民站管理层级", "chapters": [{"id": "c1"}, {"id": "c2"}]},
+            "genre": "科幻",
+            "world_brief": "近未来火星殖民恒星际文明的权力与技术阶段。",
+            "power_system": {"name": "技术阶段", "description": "曲率引擎等级", "levels": [{"id": "p0", "name": "曲率入门", "note": "第一级"}]},
+            "level_system": {"name": "职级", "description": "殖民站管理层级", "chapters": [{"id": "c1", "name": "拓荒者"}, {"id": "c2", "name": "执政官"}]},
         },
     )
     write_yaml(
@@ -50,6 +52,11 @@ def test_discussion_snapshot_full(tmp_path):
     assert by_name["技术阶段"]["levels_count"] == 1
     assert by_name["职级"]["chapters_count"] == 2
     assert by_name["职级"]["levels_count"] == 0
+    # 具体内容（等级/章节阶梯）：供面板「以上世界模型与设定」直接呈现
+    assert by_name["技术阶段"]["levels"] == [{"name": "曲率入门", "note": "第一级"}]
+    assert by_name["职级"]["chapters"] == [{"name": "拓荒者", "note": ""}, {"name": "执政官", "note": ""}]
+    assert snap["world_brief"] == "近未来火星殖民恒星际文明的权力与技术阶段。"
+    assert snap["genre"] == "科幻"
     assert snap["discussion_summary"]["summary"] == "探讨了技术阶段与职级"
     assert snap["discussion_summary"]["last_updated"] == "2026-09-06"
     assert snap["discussion_summary"]["session_file"] == "s1.jsonl"

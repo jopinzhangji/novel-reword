@@ -680,27 +680,47 @@ async function loadDiscussion(){
     ? `<div style="margin-top:6px" class="mut"><span class="tag">当前建议</span> ${esc(sugg)}</div>`
     : "";
 
-  // —— 下方：详细情况（world / 设定方向 / 归档讨论；可下转查看）——
+  // —— 简介：始终可编辑；未填时提供「补充简介」入口（作者在环可不被打扰时当场补填种子）——
   const syn = d.synopsis || "";
-  const synEdit = syn
+  const synCtrl = syn
     ? `<div class="row"><span>简介</span><span>${esc(syn)}</span> · <button onclick="editSynopsisInline()">编辑</button></div>`
-    : `<div class="mut">尚未填写简介——新小说进作者在环时会引导填写，作为设定讨论的初始种子。</div>`;
+    : `<div class="row"><span>简介</span><span style="color:var(--warn)">未填</span> · <button onclick="editSynopsisInline()">补充简介</button></div>`;
 
   const w = d.world || {};
   const scopes = (w.scopes||[]).map(s => `<span class="tag" title="${esc(s.description)}">${esc(s.name||s.id)}</span>`).join(" ");
-  const worldHtml = `<div class="row"><span>世界</span><span>${esc(w.name||"—")}${w.era?(" · "+esc(w.era)):""}</span></div>` +
-    (w.rules ? `<div class="mut" style="font-size:12px">${esc(w.rules)}</div>` : "") +
-    (scopes ? `<div style="margin-top:4px">${scopes}</div>` : "");
+  const wb = d.world_brief || "";
+  const genreTag = d.genre ? `<span class="tag">${esc(d.genre)}</span>` : "";
+  const worldInner = `<div class="row"><span>世界名</span><span>${esc(w.name||"—")}${w.era?(" · "+esc(w.era)):""}</span></div>` +
+    (genreTag ? `<div class="row"><span>题材</span><span>${genreTag}</span></div>` : "") +
+    (wb ? `<div class="mut" style="font-size:12px;margin-top:4px">${esc(wb)}</div>` : "") +
+    (w.rules ? `<div class="mut" style="font-size:12px">规则：${esc(w.rules)}</div>` : "") +
+    (scopes ? `<div style="margin-top:4px">范围 ${scopes}</div>` : "");
 
+  // 等级/章节的具体阶梯（引擎审阅屏所指的「具体内容」）
+  const ladder = (items, label) => {
+    if (!items || !items.length) return "";
+    return `<div class="mut" style="font-size:11px;margin-top:3px">${esc(label)}归纳：` +
+      items.slice(0,8).map(it => `<span class="tag" title="${esc(it.note)}">${esc(it.name)}</span>`).join(" → ") +
+      (items.length>8 ? " …" : "") + `</div>`;
+  };
   const settings = (d.settings||[]).map(s => `
     <div class="card small">
       <b>${esc(s.name)}</b>
       <div class="mut" style="font-size:12px">${esc(s.description)}</div>
-      <div class="mut" style="font-size:11px">等级 ${s.levels_count} · 章节 ${s.chapters_count}</div>
+      ${ladder(s.levels, "等级")}
+      ${ladder(s.chapters, "章节")}
+      <div class="mut" style="font-size:11px">${s.levels_count} 级 · ${s.chapters_count} 章</div>
     </div>`).join("");
   const setHtml = settings
     ? `<div class="grid">${settings}</div>`
     : `<div class="mut">尚未生成设定方向（设定讨论会在填简介后产出）。</div>`;
+
+  // —— 「以上世界模型与设定」：引擎审阅屏所指内容，直接展开在顶部当前建议/情况之下 ——
+  const reviewHtml = `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
+      <h4 class="secsub" style="font-size:12px">当前世界模型与设定（请审阅）</h4>
+      ${worldInner}
+      <h4 class="secsub" style="font-size:12px;margin-top:8px">设定方向</h4>${setHtml}
+    </div>`;
 
   const ds = d.discussion_summary || {};
   const discHtml = ds.summary
@@ -708,22 +728,16 @@ async function loadDiscussion(){
       (ds.last_updated ? `<div class="mut" style="font-size:11px">更新于 ${esc(ds.last_updated)}</div>` : "")
     : `<div class="mut">尚无归档讨论摘要。</div>`;
 
-  const detailId = "discDetail";
-  const details = `<div id="${detailId}" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">
-      ${synEdit}
-      <h4 class="secsub" style="font-size:12px;margin-top:8px">世界</h4>${worldHtml}
-      <h4 class="secsub" style="font-size:12px;margin-top:8px">设定方向</h4>${setHtml}
-      <h4 class="secsub" style="font-size:12px;margin-top:8px">最近归档讨论</h4>${discHtml}
-    </div>`;
-
   el("discussionBox").innerHTML = `
     <div>
       <div class="mut" style="font-size:11px">阶段</div>${statusHtml}
+      ${synCtrl}
       ${suggHtml}
+      ${reviewHtml}
     </div>
     <details open>
-      <summary style="cursor:pointer;margin-top:8px" ondblclick="event.preventDefault()">查看详细情况（下转）</summary>
-      ${details}
+      <summary style="cursor:pointer;margin-top:8px" ondblclick="event.preventDefault()">最近归档讨论（下转）</summary>
+      ${discHtml}
     </details>`;
 }
 

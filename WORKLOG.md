@@ -15,6 +15,17 @@
 
 ## 2026-09-06
 
+### 设定讨论面板未呈现「以上世界模型与设定」具体内容 + 无补充简介入口（D13 §6.9，后端 + 前端）
+
+- **需求（用户反馈）**：作者在环显示「请审阅以上世界模型与设定…」审阅屏，但「设定讨论/设定情况」面板顶部只显示计数与建议文案，**不显示该具体内容**（敕印等级阶梯、世界 brief 等），且 synopsis 为空时**没有「补充简介」入口**（旧 `synEdit` 仅在 synopsis 非空时渲染「编辑」钮，空时仅一行死文案）。
+- **后端（`src/workbench/discussion.py`）**：`_settings_from_file` 每方向增 `levels`/`chapters` **具体条目数组**（`_item_list` 规整为 `{name,note}`，缺省回落 id）供面板直接呈现阶梯；`discussion_snapshot` 增 `world_brief`/`genre`（`_world_meta_from_setting_research` 读 setting_research_output 顶层）。既有 `levels_count/chapters_count` 保留。
+- **前端（`web/static/index.html` `loadDiscussion`）**：顶部简介行改为**始终可编辑**——未填显示「补充简介」钮、已填显示「编辑」钮（均走 `editSynopsisInline` prompt→PATCH）；「以上世界模型与设定」内容**直接展开**在「当前建议」之下（世界名/题材/+`world_brief`/范围 + 设定方向卡带等级「→」阶梯与章节），替代原先折叠在 `<details>` 的世界/设定方向；`<details>` 仅保留「最近归档讨论（下转）」。
+- **测试**：`test_workbench_discussion.py` 断言 `settings[].levels/chapters` 具体条目与 `world_brief`/`genre`；全量回归 **491 通过 + 1 跳过**；`node --check` 抽 JS 通过。live 校验：轮回路快照现返回世界 brief「双河九邦」+ 敕印/行会等级阶梯。
+
+---
+
+## 2026-09-06
+
 ### 首次设定引导补填的核心未持久化 → 面板/建议不显示简介（D13 §6.9，`design_phase`）
 
 - **需求（用户反馈）**：`setting_intent_bootstrap` 阶段（世界空、无简介）终端输出能看到作者填写的设定方向内容，但「设定讨论/设定情况」面板下无简介，「当前建议」也不体现（仍报「未填简介先补种子」）。
