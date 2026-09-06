@@ -76,6 +76,14 @@
 - **单测 +3**（`test_web_security.py`）：setdefault 载入基本值、注释/空行/空值跳过、不覆盖已设 shell 变量、无文件/幂等。全量 **468 通过 + 1 跳过**。
 - **实机验证**：重启服务（pid 840311）后开会话，`LLM 配置: framework.llm=openai_compatible, Provider=QuotaAwareLLMProvider`、无「未设置环境变量」警告——.env 密钥生效，工作台用真实 LLM。
 
+### 工作台前端 Material Design 3 主题（前端样式，2026-09-01）
+
+- **需求**：把 `web/static/index.html` 前端风格改为 **Material Design**。
+- **做法**：重写 `<style>` 为 **Material 3 调色板 + 组件规范**——顶部应用栏（62px、elevation）、内容面板/小说卡/`mini` 卡（16px/14px 圆角 + elevation 分层、嵌套不叠双阴影）、**Filled-Tonal 按钮**（圆角 10、无描边）、**Outlined Field** 输入框（聚焦主色环）、**Chips**（pill/tag 圆粒）、左侧 **Material 导航列表**（激活=主力容器色、悬浮=次级容器色）、终端深色 elevation 面板、细滚动条。
+- **关键零改动保证**：JS 模板与内联样式大量引用 `var(--acc/--line/--ink/--mut/--card/--bg)`，故在触面板里**保留这些遗留变量名并改写为 Material 值**（`--acc → --md-pri` 等），**所有 JS/内联样式零修改**即随主题切换；全部 element id、`el()`/`onclick` 钓点、`.dimsec` 懒加载逻辑未动。
+- **验证**：JS 抽块 `node --check` 通过；服务按请求读磁盘，浏览器刷新即见新主题。
+- 全量单测不受前端影响（468 passed + 1 skipped）。
+
 ---
 
 ## 2026-08-31
