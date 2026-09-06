@@ -29,6 +29,7 @@ from src.config import (
     update_world_brief,
 )
 from src.author_loop.author_session import AuthorSession
+from src.author_loop.novel_identity import write_synopsis
 from src.author_harness.author_harness import apply_design_main_menu_ingress
 from src.author_loop.classify_intent import classify_intent, looks_like_menu_freeform_design_input
 from src.author_harness.prompt_assembler import assemble_retrieval_prompt_block
@@ -963,6 +964,18 @@ def run_design_phase(
                         logger.debug("[设定讨论] run_design_phase: 作者选择保留现有设定，跳过 agent.run()")
                     else:
                         logger.info("作者确认重新生成，将覆盖现有设定。")
+                        # 作者确认覆盖重生成且无简介种子：先请补填一句简介作为初始种子（一次性）
+                        if not synopsis and not session.extra.get("_author_synopsis_seeded"):
+                            nroot = current_novel_root(config_dir)
+                            if nroot:
+                                got = session.read_line(
+                                    "当前没有小说简介（一句话设定）。请先填一句简介，作为重新生成设定的初始种子（可直接回车跳过）："
+                                ).strip()
+                                if got:
+                                    write_synopsis(nroot, got)
+                                    synopsis = got
+                                    reference = (synopsis or "").strip()
+                            session.extra["_author_synopsis_seeded"] = True
             if run_agent_this_turn:
                 if is_world_config_empty(world_config) and not session.extra.get(
                     "_author_setting_intent_collected"

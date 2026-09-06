@@ -81,3 +81,53 @@ def test_run_design_phase_reference_initialized_from_synopsis(tmp_path, monkeypa
             synopsis="近未来火星殖民从严",
         )
     assert "近未来火星殖民从严" in captured.get("reference", "")
+
+
+def test_run_design_phase_regen_without_synopsis_prompts_seed(tmp_path, monkeypatch):
+    """作者确认重新生成（覆盖现有设定）且无 synopsis 时，先引导填一句简介作种子并持久化。"""
+    import yaml
+
+    from src.author_loop import design_phase as dp
+
+    captured = {}
+    replies = iter(["n", "近未来火星殖民从严"])  # 覆盖确认=n(重新生成), 再填简介种子
+
+    class _Agent:
+        def __init__(self, output_dir):  # noqa: D401
+            pass
+
+        def run(self, **kw):
+            captured["reference"] = kw.get("reference")
+            raise SystemExit("regen-ref")  # 中断主循环
+
+    monkeypatch.setattr(dp, "SettingResearchAgent", _Agent)
+    # 让「检测已有设定」成立，从而触发「是否保留现有设定」覆盖确认
+    monkeypatch.setattr(dp, "_has_existing_setting_output", lambda config_dir: True)
+    monkeypatch.setattr(
+        dp, "_prompt_author_intent_for_setting_research", lambda s, *, genre, theme, seed=None: ("SEED-LINE", "科幻")
+    )
+
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    novel_root = tmp_path / "data" / "novels" / "alpha"
+    novel_root.mkdir(parents=True, exist_ok=True)
+    (novel_root / "config").mkdir(parents=True, exist_ok=True)
+    (config_dir / "current_novel.yaml").write_text(
+        yaml.safe_dump({"slug": "alpha", "title": "火星", "root": str(novel_root), "provisional": False}, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit):
+        dp.run_design_phase(
+            config_dir,
+            {"agents": {"characters": {"enabled_ids": []}, "scopes": {"enabled_ids": []}}},
+            {"world": {"name": "火星", "era": "近未来"}},  # 世界已填 → 不触发意图询问，直接核对重建种子
+            {"characters": []},
+            input_fn=lambda _: next(replies),
+            synopsis=None,  # 无简介种子
+        )
+    assert captured.get("reference") == "近未来火星殖民从严"
+    # 简介应已持久化到 meta.yaml，供「设定讨论/设定情况」面板读取
+    from src.author_loop.novel_identity import read_synopsis
+
+    assert read_synopsis(novel_root) == "近未来火星殖民从严"
